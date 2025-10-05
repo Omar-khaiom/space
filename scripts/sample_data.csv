@@ -1,0 +1,8 @@
+# Sample SDSS data for testing
+# Use this if you don't have access to SDSS SkyServer
+ra,dec,z,modelMag_r
+180.5234,2.1234,0.045,18.5
+179.8765,2.5678,0.067,19.2
+181.2345,1.8765,0.023,17.8
+180.9876,2.7890,0.089,20.1
+179.5432,1.5432,0.056,18.9

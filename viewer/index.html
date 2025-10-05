@@ -3,13 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Galaxy Visualization</title>
+    <title>Cosmic-Web Visualization</title>
     <style>
         body {
             margin: 0;
             padding: 0;
-            background: #000;
-            font-family: Arial, sans-serif;
+            background: radial-gradient(circle at center, #0a0a2e 0%, #000000 70%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            color: #ffffff;
         }
         
         canvas {
@@ -21,32 +23,190 @@
             cursor: grabbing;
         }
         
-        #controls {
+        #hud {
             position: absolute;
-            top: 10px;
-            left: 10px;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            min-width: 280px;
+            z-index: 1000;
+        }
+        
+        #hud h3 {
+            margin-top: 0;
+            color: #4dd0e1;
+            text-shadow: 0 0 10px rgba(77, 208, 225, 0.5);
+            font-size: 18px;
+        }
+        
+        .status {
+            color: #81c784;
+            font-weight: bold;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #b0bec5;
+            font-size: 13px;
+        }
+        
+        .control-group select,
+        .control-group input[type="range"] {
+            width: 100%;
+            margin-bottom: 8px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
             color: white;
-            z-index: 100;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s ease;
+            flex: 1;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .info-panel {
+            background: rgba(0, 20, 40, 0.7);
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border-left: 3px solid #4dd0e1;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+        
+        .info-label {
+            color: #90a4ae;
+        }
+        
+        .info-value {
+            color: #ffffff;
+            font-weight: bold;
+        }
+        
+        #performance {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #81c784;
+        }
+        
+        .quality-toggle {
+            background: #2196f3 !important;
+        }
+        
+        .quality-toggle.performance-mode {
+            background: #ff9800 !important;
         }
     </style>
 </head>
 <body>
-    <div id="controls">
-        <h3>Galaxy Visualization Controls</h3>
-        <div>
-            <label>LOD Level: <select id="lodLevel">
-                <option value="0">Level 0 (High Detail)</option>
-                <option value="1">Level 1 (Medium Detail)</option>
-                <option value="2">Level 2 (Low Detail)</option>
-            </select></label>
+    <div id="hud">
+        <h3>🌌 Cosmic-Web Explorer</h3>
+        <div class="status" id="status">Initializing...</div>
+        
+        <div class="control-group">
+            <label>LOD Level:</label>
+            <select id="lodLevel">
+                <option value="0">LOD 0 (Coarse - ~50k)</option>
+                <option value="1">LOD 1 (Medium - ~250k)</option>
+                <option value="2">LOD 2 (Full Detail)</option>
+            </select>
         </div>
-        <div>
-            <label>Point Size: <input type="range" id="pointSize" min="1" max="10" value="2"></label>
+        
+        <div class="control-group">
+            <label>Point Size: <span id="pointSizeValue">3</span></label>
+            <input type="range" id="pointSize" min="0.5" max="10" value="3" step="0.5">
+        </div>
+        
+        <div class="button-group">
+            <button id="resetCamera">🏠 Reset View</button>
+            <button id="qualityToggle" class="quality-toggle">🎨 Quality Mode</button>
+        </div>
+        
+        <div class="button-group">
+            <button id="bookmark1">📌 Bookmark 1</button>
+            <button id="bookmark2">📌 Bookmark 2</button>
+        </div>
+        
+        <div class="info-panel" style="margin-top: 10px; padding: 8px; font-size: 11px;">
+            <div style="color: #4dd0e1; font-weight: bold; margin-bottom: 5px;">🎯 Jarvis Controls:</div>
+            <div style="margin-bottom: 3px;">• Click galaxy to focus</div>
+            <div style="margin-bottom: 3px;">• ESC to return to overview</div>
+            <div style="margin-bottom: 3px;">• R to reset camera</div>
+            <div>• Q to toggle quality</div>
+        </div>
+        
+        <div class="info-panel" id="hoverInfo">
+            <div class="info-row">
+                <span class="info-label">Galaxies:</span>
+                <span class="info-value" id="galaxyCount">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Visible:</span>
+                <span class="info-value" id="visibleCount">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Redshift:</span>
+                <span class="info-value" id="redshift">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Magnitude:</span>
+                <span class="info-value" id="magnitude">-</span>
+            </div>
         </div>
     </div>
     
-    <canvas id="glCanvas"></canvas>
+    <div id="performance">
+        <div>FPS: <span id="fps">--</span></div>
+        <div>Points: <span id="pointCount">--</span></div>
+    </div>
     
+    <!-- Three.js from LOCAL file (CDN fallback failed) -->
+    <script src="three.min.js"></script>
+    <script>
+        // Verify Three.js loaded properly
+        if (typeof THREE !== 'undefined') {
+            console.log('✅ Three.js loaded locally, version:', THREE.REVISION);
+        } else {
+            console.error('❌ Three.js failed to load even locally');
+            document.getElementById('status').textContent = 'ERROR: Three.js failed to load';
+        }
+    </script>
     <script src="main.js"></script>
 </body>
 </html>
