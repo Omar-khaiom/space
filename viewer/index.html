@@ -139,16 +139,7 @@
         <h3>🌌 Cosmic-Web Explorer</h3>
         <div class="status" id="status">Initializing...</div>
         
-        <div class="control-group">
-            <label>LOD Level:</label>
-            <select id="lodLevel">
-                <option value="0">LOD 0 (Coarse - ~50k)</option>
-                <option value="1">LOD 1 (Medium - ~250k)</option>
-                <option value="2">LOD 2 (Full Detail)</option>
-            </select>
-        </div>
-        
-        <div class="control-group">
+        <div class="control-group" style="display: none;">
             <label>Point Size: <span id="pointSizeValue">3</span></label>
             <input type="range" id="pointSize" min="0.5" max="10" value="3" step="0.5">
         </div>
@@ -164,11 +155,21 @@
         </div>
         
         <div class="info-panel" style="margin-top: 10px; padding: 8px; font-size: 11px;">
-            <div style="color: #4dd0e1; font-weight: bold; margin-bottom: 5px;">🎯 Jarvis Controls:</div>
-            <div style="margin-bottom: 3px;">• Click galaxy to focus</div>
-            <div style="margin-bottom: 3px;">• ESC to return to overview</div>
-            <div style="margin-bottom: 3px;">• R to reset camera</div>
-            <div>• Q to toggle quality</div>
+            <div style="color: #4dd0e1; font-weight: bold; margin-bottom: 8px;">� CONTROLS:</div>
+            
+            <div style="color: #90a4ae; font-size: 10px; margin-bottom: 8px;">
+                <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">LEFT DRAG</span> → Rotate</div>
+                <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">MIDDLE DRAG</span> → Pan</div>
+                <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">SCROLL</span> → Zoom</div>
+                <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">CLICK</span> → Focus on galaxy</div>
+                <div style="margin-top: 6px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px;">
+                    <div style="margin-bottom: 4px;"><span style="color: #4dd0e1;">R</span> = Reset</div>
+                    <div style="margin-bottom: 4px;"><span style="color: #4dd0e1;">Q</span> = Quality Mode</div>
+                    <div style="margin-bottom: 4px;"><span style="color: #4dd0e1;">1/2</span> = Load Bookmark</div>
+                    <div style="margin-bottom: 4px;"><span style="color: #4dd0e1;">SHIFT+1/2</span> = Save Location</div>
+                    <div><span style="color: #4dd0e1;">ESC</span> = Overview | <span style="color: #4dd0e1;">H</span> = Help</div>
+                </div>
+            </div>
         </div>
         
         <div class="info-panel" id="hoverInfo">
@@ -196,17 +197,8 @@
         <div>Points: <span id="pointCount">--</span></div>
     </div>
     
-    <!-- Three.js from LOCAL file (CDN fallback failed) -->
+    <!-- Three.js library -->
     <script src="three.min.js"></script>
-    <script>
-        // Verify Three.js loaded properly
-        if (typeof THREE !== 'undefined') {
-            console.log('✅ Three.js loaded locally, version:', THREE.REVISION);
-        } else {
-            console.error('❌ Three.js failed to load even locally');
-            document.getElementById('status').textContent = 'ERROR: Three.js failed to load';
-        }
-    </script>
     <script src="main.js"></script>
 </body>
 </html>
