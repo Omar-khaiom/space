@@ -20,6 +20,13 @@ class CosmicWebViewer {
 
     // Timing for animation
     this.lastTime = performance.now();
+    this.frameCount = 0;
+    this.fps = 0;
+    this.lastFpsTime = performance.now();
+
+    // HUD tracking
+    this.velocity = 0;
+    this.lastCameraPosition = new THREE.Vector3();
 
     // Live API integration
     this.apiUrl = "http://localhost:5000";
@@ -72,10 +79,10 @@ class CosmicWebViewer {
   // Load full-sky bright star catalog
   async loadBrightCatalog() {
     try {
-      this.updateStatus("Loading 9000 naked-eye visible stars...");
-      console.log("🌟 Fetching full-sky bright star catalog (mag < 6.5)...");
+      this.updateStatus("Loading ALL Gaia DR3 stars...");
+      console.log("🌟 Fetching ALL star catalog (mag < 7.0)...");
 
-      // Load all 20K stars from catalog
+      // Load ALL stars - distance scaling will handle visual clarity
       const url = `${this.apiUrl}/api/stars/bright-catalog?mag_limit=7.0`;
       const response = await fetch(url);
 
@@ -131,10 +138,11 @@ class CosmicWebViewer {
   setupRenderer() {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setClearColor(0x000011, 1);
+    this.renderer.setClearColor(0x000005, 1); // Darker background for better contrast
     document.body.appendChild(this.renderer.domElement);
 
     window.addEventListener("resize", () => this.onWindowResize());
+    console.log("✨ Enhanced star rendering with vivid colors enabled!");
   }
 
   setupControls() {
@@ -472,18 +480,28 @@ class CosmicWebViewer {
   convertApiStarsToGalaxyData(apiStars, centerCoords) {
     const stars = [];
 
-    // Color mapping from B-V color index
+    // Color mapping from BP-RP color index
     const getColorFromBV = (bv) => {
-      // B-V ranges from about -0.4 (blue) to +2.0 (red)
-      // Default to white if no color data
-      if (bv === undefined || bv === null) return [1.0, 1.0, 1.0];
+      // BP-RP ranges from -0.5 (hot blue) to +7.4 (very cool red)
+      // BALANCED: Natural colors, easy on the eyes, still realistic
+      if (bv === undefined || bv === null) return [0.9, 0.9, 1.0]; // Slight blue-white
 
-      if (bv < 0) return [0.6, 0.7, 1.0]; // Blue stars (hot)
-      if (bv < 0.3) return [0.8, 0.9, 1.0]; // Blue-white
-      if (bv < 0.6) return [1.0, 1.0, 1.0]; // White (like Sun at 0.65)
-      if (bv < 1.0) return [1.0, 0.95, 0.7]; // Yellow-white
-      if (bv < 1.5) return [1.0, 0.8, 0.5]; // Orange
-      return [1.0, 0.6, 0.4]; // Red (cool)
+      // Very hot blue stars (O, B types) - Soft blue
+      if (bv < 0) return [0.5, 0.7, 1.0];
+      // Hot blue-white (A types like Vega, Sirius) - Bright blue-white
+      if (bv < 0.5) return [0.75, 0.85, 1.0];
+      // White (F types) - Pure white
+      if (bv < 0.8) return [1.0, 1.0, 1.0];
+      // Yellow-white (G types like Sun) - SOFTER yellow (less harsh)
+      if (bv < 1.2) return [1.0, 0.95, 0.8]; // Much less saturated yellow
+      // Orange (K types) - Gentle orange
+      if (bv < 1.8) return [1.0, 0.75, 0.5];
+      // Red (early M types) - Orange-red
+      if (bv < 2.5) return [1.0, 0.6, 0.3];
+      // Deep red (late M types) - Deep red
+      if (bv < 4.0) return [1.0, 0.4, 0.2];
+      // Very cool red dwarfs/giants - Dark red
+      return [0.9, 0.3, 0.15];
     };
 
     for (const star of apiStars) {
@@ -511,13 +529,14 @@ class CosmicWebViewer {
         x: pos.x,
         y: pos.y,
         z: pos.z,
+        pos: pos.clone(), // Store Vector3 for distance calculations
         r: color[0],
         g: color[1],
         b: color[2],
         magnitude: star.magnitude || 10.0,
         distance: distance,
         // Store original data for future use
-        sourceId: star.source_id,
+        source_id: star.source_id,
         ra: star.ra,
         dec: star.dec,
         parallax: star.parallax,
@@ -630,68 +649,131 @@ class CosmicWebViewer {
       colors[i3 + 1] = galaxy.g;
       colors[i3 + 2] = galaxy.b;
 
-      // Size based on magnitude (brighter stars = MUCH bigger, faint stars = tiny)
+      // Size based on magnitude - Base size for distance scaling
       const mag = galaxy.magnitude || 15.0;
-      // Bright stars: mag < 3 (very large)
-      // Medium: mag 3-8 (moderate)
-      // Faint: mag > 8 (tiny)
-      let size;
+      let baseSize;
       if (mag < 2) {
-        size = 8.0 + (2 - mag) * 2.0; // Very bright: 8-14
+        // Super bright stars (Sirius, Canopus, etc.) - HUGE with dramatic glow
+        baseSize = 15.0 + (2 - mag) * 5.0; // 15-25 size
+      } else if (mag < 3) {
+        // Very bright stars - large and prominent
+        baseSize = 10.0 + (3 - mag) * 5.0; // 10-15 size
+      } else if (mag < 4) {
+        // Bright stars - clearly visible
+        baseSize = 6.0 + (4 - mag) * 4.0; // 6-10 size
       } else if (mag < 5) {
-        size = 4.0 + (5 - mag) * 1.3; // Bright: 4-8
-      } else if (mag < 10) {
-        size = 1.5 + (10 - mag) * 0.5; // Medium: 1.5-4
+        // Medium-bright stars
+        baseSize = 3.0 + (5 - mag) * 3.0; // 3-6 size
+      } else if (mag < 6) {
+        // Faint but visible stars
+        baseSize = 1.5 + (6 - mag) * 1.5; // 1.5-3 size
       } else {
-        size = 0.5 + Math.max(0, (15 - mag) * 0.2); // Faint: 0.5-1.5
+        // Very faint background stars
+        baseSize = 0.5 + Math.max(0, (7 - mag) * 1.0); // 0.5-1.5 size
       }
-      sizes[i] = size;
+
+      // Apply distance-based scaling (natural perspective culling)
+      const distance = Math.sqrt(
+        galaxy.x * galaxy.x + galaxy.y * galaxy.y + galaxy.z * galaxy.z
+      );
+      const distanceScale = Math.max(0.1, 1.0 - distance / 1000.0); // Fade with distance
+      sizes[i] = baseSize * distanceScale;
+    }
+
+    // Generate random twinkle phases for each star
+    const twinkles = new Float32Array(this.galaxyData.length);
+    for (let i = 0; i < this.galaxyData.length; i++) {
+      twinkles[i] = Math.random(); // Random phase 0-1
     }
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     geometry.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
+    geometry.setAttribute("twinkle", new THREE.BufferAttribute(twinkles, 1));
 
     // Create circular star texture
     const canvas = document.createElement("canvas");
-    canvas.width = 64;
-    canvas.height = 64;
+    canvas.width = 128;
+    canvas.height = 128;
     const ctx = canvas.getContext("2d");
 
-    // Draw circular gradient
-    const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-    gradient.addColorStop(0, "rgba(255,255,255,1)");
-    gradient.addColorStop(0.2, "rgba(255,255,255,0.8)");
+    // Draw glow-like circular gradient with softer falloff
+    const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gradient.addColorStop(0, "rgba(255,255,255,1.0)");
+    gradient.addColorStop(0.1, "rgba(255,255,255,0.9)");
+    gradient.addColorStop(0.25, "rgba(255,255,255,0.6)");
     gradient.addColorStop(0.5, "rgba(255,255,255,0.3)");
+    gradient.addColorStop(0.75, "rgba(255,255,255,0.1)");
     gradient.addColorStop(1, "rgba(255,255,255,0)");
 
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 64, 64);
+    ctx.fillRect(0, 0, 128, 128);
 
     const texture = new THREE.CanvasTexture(canvas);
 
     const material = new THREE.ShaderMaterial({
       uniforms: {
         pointTexture: { value: texture },
+        time: { value: 0.0 },
       },
       vertexShader: `
         attribute float size;
         attribute vec3 color;
+        attribute float twinkle;
         varying vec3 vColor;
+        varying float vBrightness;
+        varying float vDistance;
+        uniform float time;
+        
         void main() {
           vColor = color;
+          vBrightness = size / 20.0;
+          
           vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = size * (300.0 / -mvPosition.z); // Scale with distance
+          vDistance = length(position); // Distance from camera for fog
+          
+          // INCREASED twinkling (30% size variation - much more visible!)
+          float twinkleAmount = 0.30;
+          float pulse = sin(time * 1.5 + twinkle * 6.28) * 0.5 + 0.5;
+          float sizeMultiplier = 1.0 + (pulse * twinkleAmount);
+          
+          gl_PointSize = size * sizeMultiplier * (300.0 / -mvPosition.z);
           gl_Position = projectionMatrix * mvPosition;
         }
       `,
       fragmentShader: `
         uniform sampler2D pointTexture;
         varying vec3 vColor;
+        varying float vBrightness;
+        varying float vDistance;
+        
         void main() {
-          gl_FragColor = vec4(vColor, 1.0);
-          gl_FragColor = gl_FragColor * texture2D(pointTexture, gl_PointCoord);
+          vec4 tex = texture2D(pointTexture, gl_PointCoord);
+          
+          // Distance fog for better depth perception (200-600pc range)
+          float fogStart = 200.0;
+          float fogEnd = 600.0;
+          float fogFactor = clamp((fogEnd - vDistance) / (fogEnd - fogStart), 0.0, 1.0);
+          
+          // Fine-tuned color saturation (richer colors)
+          vec3 luminance = vec3(0.299, 0.587, 0.114);
+          float lum = dot(vColor, luminance);
+          vec3 saturatedColor = mix(vec3(lum), vColor, 1.5);
+          
+          // Gentler brightness boost
+          vec3 boostedColor = saturatedColor * (1.3 + vBrightness * 0.4);
+          
+          // Apply distance fog with dark blue tint
+          vec3 fogColor = vec3(0.0, 0.0, 0.02);
+          vec3 finalColor = mix(fogColor, boostedColor, fogFactor);
+          
+          gl_FragColor = vec4(finalColor, fogFactor) * tex;
+          
+          // Extra brightness for very bright stars
+          if (vBrightness > 0.8) {
+            gl_FragColor.rgb *= 1.3;
+          }
         }
       `,
       blending: THREE.AdditiveBlending,
@@ -702,6 +784,9 @@ class CosmicWebViewer {
 
     this.points = new THREE.Points(geometry, material);
     this.scene.add(this.points);
+
+    // Store material reference for animation
+    this.starMaterial = material;
   }
 
   animate() {
@@ -710,14 +795,83 @@ class CosmicWebViewer {
     const delta = (now - this.lastTime) / 1000;
     this.lastTime = now;
 
+    // Update twinkling animation
+    if (this.starMaterial && this.starMaterial.uniforms.time) {
+      this.starMaterial.uniforms.time.value = now / 1000.0; // Time in seconds
+    }
+
     // Update keyboard controls (free-flight movement)
     this.updateKeyboardControls(delta);
+
+    // Update HUD data
+    this.updateHUD(delta);
 
     // No longer reload stars on camera movement - we have the full sky loaded!
 
     // Render
     this.renderer.render(this.scene, this.camera);
     requestAnimationFrame(() => this.animate());
+  }
+
+  updateHUD(delta) {
+    // Calculate FPS
+    this.frameCount++;
+    const now = performance.now();
+    if (now - this.lastFpsTime >= 1000) {
+      this.fps = this.frameCount;
+      this.frameCount = 0;
+      this.lastFpsTime = now;
+    }
+
+    // Calculate velocity (parsecs per second)
+    const currentPos = this.camera.position.clone();
+    const distance = currentPos.distanceTo(this.lastCameraPosition);
+    this.velocity = distance / delta;
+    this.lastCameraPosition.copy(currentPos);
+
+    // Find nearest star
+    let nearestStar = null;
+    let nearestDistance = Infinity;
+
+    for (const star of this.galaxyData) {
+      if (star.pos) {
+        const dist = currentPos.distanceTo(star.pos);
+        if (dist < nearestDistance) {
+          nearestDistance = dist;
+          nearestStar = star;
+        }
+      }
+    }
+
+    // Update HUD elements
+    const positionEl = document.getElementById("redshift");
+    if (positionEl) {
+      positionEl.textContent = `${currentPos.x.toFixed(
+        1
+      )}, ${currentPos.y.toFixed(1)}, ${currentPos.z.toFixed(1)}`;
+    }
+
+    const fpsEl = document.getElementById("magnitude");
+    if (fpsEl) {
+      fpsEl.textContent = `${this.fps} • ${this.velocity.toFixed(0)} pc/s`;
+    }
+
+    const countEl = document.getElementById("galaxyCount");
+    if (countEl) {
+      if (nearestStar && nearestDistance < 1000) {
+        const starName = nearestStar.source_id
+          ? `Gaia ${nearestStar.source_id.toString().slice(-6)}`
+          : "Unknown";
+        const mag = nearestStar.magnitude
+          ? nearestStar.magnitude.toFixed(1)
+          : "?";
+        countEl.textContent = `${
+          this.loadedStarCount
+        } • Nearest: ${starName} (${nearestDistance.toFixed(1)}pc, mag ${mag})`;
+      } else {
+        countEl.textContent = this.loadedStarCount.toString();
+      }
+    }
   }
 
   onWindowResize() {
