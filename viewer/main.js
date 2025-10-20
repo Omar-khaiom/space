@@ -28,6 +28,12 @@ class CosmicWebViewer {
     this.velocity = 0;
     this.lastCameraPosition = new THREE.Vector3();
 
+    // Star labels
+    this.labels = [];
+    this.labelContainer = null;
+    this.famousStars = null;
+    this.approachDistance = 50; // Show labels within 50 parsecs
+
     // Live API integration
     this.apiUrl = "http://localhost:5000";
     this.isLoadingData = false;
@@ -64,6 +70,10 @@ class CosmicWebViewer {
     this.setupCamera();
     this.setupRenderer();
     this.setupControls();
+    this.setupLabelContainer();
+
+    // Load famous star names
+    await this.loadFamousStars();
 
     // Load 20K star catalog with real 3D positions
     await this.loadBrightCatalog();
@@ -806,6 +816,9 @@ class CosmicWebViewer {
     // Update HUD data
     this.updateHUD(delta);
 
+    // Update star labels (every frame for smooth tracking)
+    this.updateStarLabels();
+
     // No longer reload stars on camera movement - we have the full sky loaded!
 
     // Render
@@ -859,9 +872,18 @@ class CosmicWebViewer {
     const countEl = document.getElementById("galaxyCount");
     if (countEl) {
       if (nearestStar && nearestDistance < 1000) {
-        const starName = nearestStar.source_id
-          ? `Gaia ${nearestStar.source_id.toString().slice(-6)}`
-          : "Unknown";
+        // Check if it's a famous star
+        let starName;
+        const starInfo = this.famousStars
+          ? this.famousStars[nearestStar.source_id]
+          : null;
+        if (starInfo) {
+          starName = `✨ ${starInfo.name}`;
+        } else {
+          starName = nearestStar.source_id
+            ? `Gaia ${nearestStar.source_id.toString().slice(-6)}`
+            : "Unknown";
+        }
         const mag = nearestStar.magnitude
           ? nearestStar.magnitude.toFixed(1)
           : "?";
@@ -902,6 +924,128 @@ class CosmicWebViewer {
     console.log(
       `Constellations ${this.showConstellations ? "visible" : "hidden"}`
     );
+  }
+
+  // === STAR LABEL SYSTEM ===
+
+  setupLabelContainer() {
+    this.labelContainer = document.createElement("div");
+    this.labelContainer.id = "star-labels";
+    this.labelContainer.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    `;
+    document.body.appendChild(this.labelContainer);
+  }
+
+  async loadFamousStars() {
+    try {
+      const module = await import("./star-names.js");
+      this.famousStars = module.FAMOUS_STARS;
+      this.labelColors = module.LABEL_COLORS;
+      console.log(
+        `✨ Loaded ${Object.keys(this.famousStars).length} famous star names`
+      );
+    } catch (error) {
+      console.warn("Could not load star names:", error);
+      this.famousStars = {};
+      this.labelColors = {};
+    }
+  }
+
+  updateStarLabels() {
+    if (!this.labelContainer || !this.famousStars) return;
+
+    // Clear old labels
+    this.labelContainer.innerHTML = "";
+
+    const cameraPos = this.camera.position;
+    const visibleLabels = [];
+
+    // Check each star for labeling
+    for (const star of this.galaxyData) {
+      const starInfo = this.famousStars[star.source_id];
+      if (!starInfo) continue;
+
+      const starPos = star.pos || new THREE.Vector3(star.x, star.y, star.z);
+      const distance = cameraPos.distanceTo(starPos);
+
+      // Show label if: always show flag OR within approach distance
+      const shouldShow =
+        starInfo.alwaysShow || distance < this.approachDistance;
+
+      if (shouldShow) {
+        // Project 3D position to 2D screen
+        const screenPos = starPos.clone();
+        screenPos.project(this.camera);
+
+        // Convert to screen coordinates
+        const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
+        const y = (-screenPos.y * 0.5 + 0.5) * window.innerHeight;
+
+        // Check if in front of camera and on screen
+        if (
+          screenPos.z < 1 &&
+          x > 0 &&
+          x < window.innerWidth &&
+          y > 0 &&
+          y < window.innerHeight
+        ) {
+          visibleLabels.push({
+            name: starInfo.name,
+            type: starInfo.type,
+            x,
+            y,
+            distance: distance.toFixed(1),
+            magnitude: star.magnitude.toFixed(1),
+            alwaysShow: starInfo.alwaysShow,
+          });
+        }
+      }
+    }
+
+    // Create label elements
+    for (const label of visibleLabels) {
+      const labelEl = document.createElement("div");
+      const color = this.labelColors[label.type] || "#ffffff";
+      const fontSize = label.alwaysShow ? "14px" : "12px";
+      const fontWeight = label.alwaysShow ? "bold" : "normal";
+
+      labelEl.style.cssText = `
+        position: absolute;
+        left: ${label.x}px;
+        top: ${label.y}px;
+        transform: translate(-50%, -100%);
+        color: ${color};
+        font-size: ${fontSize};
+        font-weight: ${fontWeight};
+        font-family: 'Segoe UI', sans-serif;
+        text-shadow: 
+          0 0 3px rgba(0,0,0,0.9),
+          0 0 6px rgba(0,0,0,0.7),
+          0 0 10px ${color}44;
+        white-space: nowrap;
+        padding: 4px 8px;
+        background: rgba(0, 0, 0, 0.5);
+        border-radius: 4px;
+        border: 1px solid ${color}66;
+        backdrop-filter: blur(4px);
+      `;
+
+      labelEl.innerHTML = `
+        <div style="line-height: 1.3;">
+          <div style="font-size: ${fontSize};">${label.name}</div>
+          <div style="font-size: 10px; opacity: 0.8;">${label.distance}pc • mag ${label.magnitude}</div>
+        </div>
+      `;
+
+      this.labelContainer.appendChild(labelEl);
+    }
   }
 }
 
