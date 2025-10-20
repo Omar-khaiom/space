@@ -38,16 +38,23 @@
         
         #hud h3 {
             margin-top: 0;
-            color: #4dd0e1;
-            text-shadow: 0 0 10px rgba(77, 208, 225, 0.5);
-            font-size: 18px;
+            color: #64b5f6;
+            text-shadow: 0 0 15px rgba(100, 181, 246, 0.6);
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: 1px;
         }
         
         .status {
             color: #81c784;
-            font-weight: bold;
+            font-weight: 500;
             margin-bottom: 15px;
-            font-size: 14px;
+            font-size: 13px;
+            padding: 8px;
+            background: rgba(129, 199, 132, 0.1);
+            border-radius: 6px;
+            border-left: 3px solid #81c784;
+        }
         }
         
         .control-group {
@@ -74,20 +81,27 @@
         }
         
         button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);
             border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
+            padding: 10px 18px;
+            border-radius: 8px;
             color: white;
             cursor: pointer;
-            font-size: 12px;
+            font-size: 13px;
+            font-weight: 500;
             transition: all 0.3s ease;
             flex: 1;
+            box-shadow: 0 2px 8px rgba(66, 165, 245, 0.3);
         }
         
         button:hover {
+            background: linear-gradient(135deg, #64b5f6 0%, #2196f3 100%);
             transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 4px 12px rgba(66, 165, 245, 0.5);
+        }
+        
+        button:active {
+            transform: translateY(0px);
         }
         
         .info-panel {
@@ -136,69 +150,50 @@
 </head>
 <body>
     <div id="hud">
-        <h3>🌌 Cosmic-Web Explorer</h3>
+        <h3>🌌 3D Space Explorer</h3>
         <div class="status" id="status">Initializing...</div>
-        
-        <div class="control-group" style="display: none;">
-            <label>Point Size: <span id="pointSizeValue">3</span></label>
-            <input type="range" id="pointSize" min="0.5" max="10" value="3" step="0.5">
-        </div>
         
         <div class="button-group">
             <button id="resetCamera">🏠 Reset View</button>
-            <button id="qualityToggle" class="quality-toggle">🎨 Quality Mode</button>
-        </div>
-        
-        <div class="button-group">
-            <button id="bookmark1">📌 Bookmark 1</button>
-            <button id="bookmark2">📌 Bookmark 2</button>
         </div>
         
         <div class="info-panel" style="margin-top: 10px; padding: 8px; font-size: 11px;">
-            <div style="color: #4dd0e1; font-weight: bold; margin-bottom: 8px;">� CONTROLS:</div>
+            <div style="color: #4dd0e1; font-weight: bold; margin-bottom: 8px;">🎮 CONTROLS:</div>
             
             <div style="color: #90a4ae; font-size: 10px; margin-bottom: 8px;">
-                <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">LEFT DRAG</span> → Rotate</div>
-                <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">MIDDLE DRAG</span> → Pan</div>
+                <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">DRAG</span> → Look Around</div>
                 <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">SCROLL</span> → Zoom</div>
-                <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">CLICK</span> → Focus on galaxy</div>
-                <div style="margin-top: 6px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px;">
-                    <div style="margin-bottom: 4px;"><span style="color: #4dd0e1;">R</span> = Reset</div>
-                    <div style="margin-bottom: 4px;"><span style="color: #4dd0e1;">Q</span> = Quality Mode</div>
-                    <div style="margin-bottom: 4px;"><span style="color: #4dd0e1;">1/2</span> = Load Bookmark</div>
-                    <div style="margin-bottom: 4px;"><span style="color: #4dd0e1;">SHIFT+1/2</span> = Save Location</div>
-                    <div><span style="color: #4dd0e1;">ESC</span> = Overview | <span style="color: #4dd0e1;">H</span> = Help</div>
-                </div>
+                <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">WASD</span> → Fly Forward/Back/Left/Right</div>
+                <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">Q/E</span> → Fly Down/Up</div>
+                <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">SPACE+W/S</span> → Fly Up/Down</div>
             </div>
         </div>
         
         <div class="info-panel" id="hoverInfo">
+            <div style="color: #4dd0e1; font-weight: bold; margin-bottom: 8px; font-size: 11px;">📊 STATS:</div>
             <div class="info-row">
-                <span class="info-label">Galaxies:</span>
+                <span class="info-label">Total Stars:</span>
                 <span class="info-value" id="galaxyCount">-</span>
             </div>
             <div class="info-row">
-                <span class="info-label">Visible:</span>
-                <span class="info-value" id="visibleCount">-</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Redshift:</span>
+                <span class="info-label">Position (pc):</span>
                 <span class="info-value" id="redshift">-</span>
             </div>
             <div class="info-row">
-                <span class="info-label">Magnitude:</span>
+                <span class="info-label">FPS:</span>
                 <span class="info-value" id="magnitude">-</span>
             </div>
         </div>
     </div>
     
-    <div id="performance">
-        <div>FPS: <span id="fps">--</span></div>
-        <div>Points: <span id="pointCount">--</span></div>
-    </div>
-    
     <!-- Three.js library -->
     <script src="three.min.js"></script>
+    <!-- Post-processing for bloom effect -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
     <script src="main.js"></script>
 </body>
 </html>
