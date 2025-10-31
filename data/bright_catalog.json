@@ -1,0 +1,222 @@
+[
+  {
+    "source_id": "2947050466531873024",
+    "ra": 101.2875,
+    "dec": -16.7161,
+    "parallax_mas": 379.21,
+    "pmra_mas_yr": -546.01,
+    "pmdec_mas_yr": -1223.07,
+    "phot_g_mean_mag": -1.46,
+    "bp_rp": 0.00,
+    "distance_ly": 8.6
+  },
+  {
+    "source_id": "5332606768788726784",
+    "ra": 95.9879,
+    "dec": -52.6957,
+    "parallax_mas": 10.55,
+    "pmra_mas_yr": 19.93,
+    "pmdec_mas_yr": 23.24,
+    "phot_g_mean_mag": -0.74,
+    "bp_rp": 0.16,
+    "distance_ly": 310
+  },
+  {
+    "source_id": "6752487305078912640",
+    "ra": 213.9153,
+    "dec": 19.1824,
+    "parallax_mas": 88.83,
+    "pmra_mas_yr": -1093.45,
+    "pmdec_mas_yr": -1999.4,
+    "phot_g_mean_mag": -0.05,
+    "bp_rp": 1.23,
+    "distance_ly": 36.7
+  },
+  {
+    "source_id": "5853498713190525696",
+    "ra": 219.9020,
+    "dec": -60.8339,
+    "parallax_mas": 754.81,
+    "pmra_mas_yr": -3679.25,
+    "pmdec_mas_yr": 473.67,
+    "phot_g_mean_mag": -0.01,
+    "bp_rp": 0.71,
+    "distance_ly": 4.37
+  },
+  {
+    "source_id": "2081065973038168832",
+    "ra": 279.2347,
+    "dec": 38.7837,
+    "parallax_mas": 130.23,
+    "pmra_mas_yr": 200.94,
+    "pmdec_mas_yr": 286.23,
+    "phot_g_mean_mag": 0.03,
+    "bp_rp": 0.00,
+    "distance_ly": 25.04
+  },
+  {
+    "source_id": "3215374747221090944",
+    "ra": 78.6344,
+    "dec": -8.2017,
+    "parallax_mas": 3.78,
+    "pmra_mas_yr": 1.87,
+    "pmdec_mas_yr": -0.56,
+    "phot_g_mean_mag": 0.13,
+    "bp_rp": -0.03,
+    "distance_ly": 863
+  },
+  {
+    "source_id": "3947918261531208064",
+    "ra": 114.8255,
+    "dec": 5.2250,
+    "parallax_mas": 284.56,
+    "pmra_mas_yr": -716.57,
+    "pmdec_mas_yr": -1034.58,
+    "phot_g_mean_mag": 0.34,
+    "bp_rp": 0.42,
+    "distance_ly": 11.46
+  },
+  {
+    "source_id": "3312486853179720832",
+    "ra": 88.7929,
+    "dec": 7.4070,
+    "parallax_mas": 5.95,
+    "pmra_mas_yr": 27.33,
+    "pmdec_mas_yr": 10.86,
+    "phot_g_mean_mag": 0.50,
+    "bp_rp": 2.06,
+    "distance_ly": 548
+  },
+  {
+    "source_id": "1841672548410993920",
+    "ra": 297.6958,
+    "dec": 8.8683,
+    "parallax_mas": 194.95,
+    "pmra_mas_yr": 536.23,
+    "pmdec_mas_yr": 385.29,
+    "phot_g_mean_mag": 0.77,
+    "bp_rp": 0.22,
+    "distance_ly": 16.73
+  },
+  {
+    "source_id": "3321968402467469568",
+    "ra": 68.9802,
+    "dec": 16.5093,
+    "parallax_mas": 50.09,
+    "pmra_mas_yr": 62.78,
+    "pmdec_mas_yr": -189.36,
+    "phot_g_mean_mag": 0.85,
+    "bp_rp": 1.54,
+    "distance_ly": 65.1
+  },
+  {
+    "source_id": "2943832640008729088",
+    "ra": 95.4900,
+    "dec": -40.3050,
+    "parallax_mas": 23.67,
+    "pmra_mas_yr": -148.18,
+    "pmdec_mas_yr": 22.92,
+    "phot_g_mean_mag": 0.96,
+    "bp_rp": -0.11,
+    "distance_ly": 137.8
+  },
+  {
+    "source_id": "4484457546179885312",
+    "ra": 152.0933,
+    "dec": 11.9672,
+    "parallax_mas": 42.09,
+    "pmra_mas_yr": -248.73,
+    "pmdec_mas_yr": 5.59,
+    "phot_g_mean_mag": 1.14,
+    "bp_rp": 1.50,
+    "distance_ly": 77.5
+  },
+  {
+    "source_id": "2056298369378105856",
+    "ra": 14.1771,
+    "dec": 60.7172,
+    "parallax_mas": 97.11,
+    "pmra_mas_yr": -163.03,
+    "pmdec_mas_yr": -231.68,
+    "phot_g_mean_mag": 1.16,
+    "bp_rp": 1.36,
+    "distance_ly": 33.6
+  },
+  {
+    "source_id": "1729749846030412160",
+    "ra": 310.3579,
+    "dec": 45.2803,
+    "parallax_mas": 97.77,
+    "pmra_mas_yr": 56.35,
+    "pmdec_mas_yr": -108.85,
+    "phot_g_mean_mag": 1.25,
+    "bp_rp": 0.13,
+    "distance_ly": 33.4
+  },
+  {
+    "source_id": "6869584850101908096",
+    "ra": 263.4021,
+    "dec": -26.4320,
+    "parallax_mas": 203.34,
+    "pmra_mas_yr": -1350.15,
+    "pmdec_mas_yr": -2335.72,
+    "phot_g_mean_mag": 1.33,
+    "bp_rp": 1.48,
+    "distance_ly": 16.0
+  },
+  {
+    "source_id": "424950494875933440",
+    "ra": 79.1720,
+    "dec": 45.9980,
+    "parallax_mas": 77.29,
+    "pmra_mas_yr": 89.35,
+    "pmdec_mas_yr": -30.42,
+    "phot_g_mean_mag": 1.65,
+    "bp_rp": 1.07,
+    "distance_ly": 42.2
+  },
+  {
+    "source_id": "4517450454349019008",
+    "ra": 139.2729,
+    "dec": -59.5092,
+    "parallax_mas": 42.52,
+    "pmra_mas_yr": -268.77,
+    "pmdec_mas_yr": 22.33,
+    "phot_g_mean_mag": 1.68,
+    "bp_rp": -0.23,
+    "distance_ly": 76.7
+  },
+  {
+    "source_id": "4295093812253085568",
+    "ra": 166.6207,
+    "dec": 49.3131,
+    "parallax_mas": 98.31,
+    "pmra_mas_yr": 44.48,
+    "pmdec_mas_yr": -11.53,
+    "phot_g_mean_mag": 1.76,
+    "bp_rp": 0.42,
+    "distance_ly": 33.2
+  },
+  {
+    "source_id": "3285925384965334528",
+    "ra": 81.5729,
+    "dec": 6.3498,
+    "parallax_mas": 7.91,
+    "pmra_mas_yr": 1.31,
+    "pmdec_mas_yr": -1.30,
+    "phot_g_mean_mag": 1.85,
+    "bp_rp": 1.86,
+    "distance_ly": 412
+  },
+  {
+    "source_id": "3340674717732505728",
+    "ra": 84.0533,
+    "dec": -1.2019,
+    "parallax_mas": 2.58,
+    "pmra_mas_yr": 1.55,
+    "pmdec_mas_yr": -0.50,
+    "phot_g_mean_mag": 1.90,
+    "bp_rp": -0.19,
+    "distance_ly": 1265
+  }
+]

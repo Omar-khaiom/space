@@ -186,9 +186,69 @@
         .quality-toggle.performance-mode {
             background: #ff9800 !important;
         }
+        
+        #star-search:focus {
+            border-color: #64b5f6;
+            box-shadow: 0 0 0 2px rgba(100, 181, 246, 0.2);
+        }
+        
+        #search-results::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        #search-results::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+        }
+        
+        #search-results::-webkit-scrollbar-thumb {
+            background: rgba(100, 181, 246, 0.5);
+            border-radius: 4px;
+        }
+        
+        #search-results::-webkit-scrollbar-thumb:hover {
+            background: rgba(100, 181, 246, 0.7);
+        }
     </style>
 </head>
 <body>
+    <!-- Status Banner (connection/loading feedback) -->
+    <div id="connection-status" style="position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:10000;display:none;
+        background:rgba(15,18,32,0.95);color:#e8f4ff;border:1px solid #4a9eff;border-radius:8px;
+        padding:10px 16px;font:13px/1.5 'Segoe UI',system-ui;box-shadow:0 4px 12px rgba(0,0,0,0.6);
+        max-width:500px;text-align:center;">
+        <span id="connection-status-text">Starting…</span>
+        <button id="connection-status-retry" style="display:none;margin-left:12px;background:#1f2a44;
+            color:#cfe3ff;border:1px solid #4a9eff;border-radius:4px;padding:5px 12px;cursor:pointer;
+            font:12px 'Segoe UI',system-ui;transition:all 0.2s;">Retry</button>
+    </div>
+
+    <!-- Search Bar -->
+    <div id="search-container" style="position:fixed;top:20px;right:20px;z-index:1000;width:320px;">
+        <input type="text" id="star-search" placeholder="🔍 Search stars (e.g., Vega, Sirius)..." 
+            style="width:100%;padding:12px 16px;background:rgba(0,0,0,0.85);border:2px solid rgba(100,181,246,0.4);
+            border-radius:10px;color:#e8f4ff;font:14px 'Segoe UI',system-ui;outline:none;
+            backdrop-filter:blur(10px);transition:all 0.3s;box-shadow:0 4px 12px rgba(0,0,0,0.5);">
+        <div id="search-results" style="display:none;margin-top:10px;background:rgba(0,0,0,0.92);
+            border:2px solid rgba(100,181,246,0.4);border-radius:10px;max-height:320px;overflow-y:auto;
+            backdrop-filter:blur(10px);box-shadow:0 4px 16px rgba(0,0,0,0.7);"></div>
+    </div>
+
+    <!-- Info Panel (appears on star selection) -->
+    <div id="info-panel" style="position:fixed;bottom:20px;right:20px;z-index:1001;width:340px;display:none;
+        background:rgba(0,0,0,0.92);border:2px solid rgba(100,181,246,0.5);border-radius:12px;
+        padding:18px;backdrop-filter:blur(12px);box-shadow:0 6px 24px rgba(0,0,0,0.8);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h4 id="info-star-name" style="margin:0;color:#64b5f6;font-size:18px;font-weight:600;text-shadow:0 0 10px rgba(100,181,246,0.5);">Star Info</h4>
+            <button id="info-close" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.3);
+                color:#ff6b6b;cursor:pointer;font-size:20px;padding:2px 8px;border-radius:6px;
+                font-weight:bold;transition:all 0.2s;" 
+                onmouseover="this.style.background='rgba(255,107,107,0.2)'"
+                onmouseout="this.style.background='rgba(255,255,255,0.1)'">×</button>
+        </div>
+        <div id="info-content" style="color:#c5d7e8;font-size:13px;line-height:1.8;"></div>
+    </div>
+
     <div id="hud">
         <div class="hud-header">
             <h3 style="margin: 0;">🌌 3D Space Explorer</h3>

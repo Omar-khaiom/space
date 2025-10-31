@@ -1,3 +1,93 @@
+// ========== API Base & Status UI Helpers ==========
+const API_BASE = (() => {
+  const url = new URL(window.location.href);
+  const qp = url.searchParams.get('api');
+  if (qp) return qp.replace(/\/$/, '');
+  const ls = localStorage.getItem('apiBase');
+  if (ls) return ls.replace(/\/$/, '');
+  return 'http://localhost:5000';
+})();
+
+const StatusUI = (() => {
+  const el = document.getElementById('connection-status');
+  const txt = document.getElementById('connection-status-text');
+  const btn = document.getElementById('connection-status-retry');
+  
+  function show(message, kind = 'info') {
+    if (!el) return;
+    txt.textContent = message;
+    el.style.display = 'block';
+    el.style.borderColor = kind === 'error' ? '#ff6666' : (kind === 'warn' ? '#ffcc66' : '#4a9eff');
+    btn.style.display = kind === 'error' ? 'inline-block' : 'none';
+  }
+  
+  function hide() {
+    if (el) el.style.display = 'none';
+  }
+  
+  function onRetry(cb) {
+    if (btn) btn.onclick = cb;
+  }
+  
+  return { show, hide, onRetry };
+})();
+
+async function fetchJSONWithTimeout(url, { timeoutMs = 8000, retry = 1 } = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    return await res.json();
+  } catch (err) {
+    clearTimeout(timer);
+    if (retry > 0 && err.name !== 'AbortError') {
+      return fetchJSONWithTimeout(url, { timeoutMs, retry: retry - 1 });
+    }
+    throw err;
+  }
+}
+
+async function fetchBrightCatalogWithFallback(magLimit = 7.0) {
+  try {
+    StatusUI.show(`🌟 Fetching bright catalog (mag < ${magLimit})…`);
+    const data = await fetchJSONWithTimeout(
+      `${API_BASE}/api/stars/bright-catalog?mag_limit=${magLimit}`,
+      { timeoutMs: 8000, retry: 1 }
+    );
+    console.log(`✅ Loaded ${data.count || data.length} stars from backend`);
+    StatusUI.show(`✅ Loaded ${(data.count || data.length).toLocaleString()} bright stars from server`);
+    setTimeout(() => StatusUI.hide(), 2000);
+    return data;
+  } catch (e) {
+    console.warn('⚠️ Backend unavailable, loading offline catalog:', e.message);
+    StatusUI.show('⚠️ Backend unavailable. Loading offline catalog…', 'warn');
+    
+    try {
+      const res = await fetch('../data/bright_catalog.json');
+      if (!res.ok) throw new Error('Offline catalog not found');
+      const data = await res.json();
+      console.log(`📦 Loaded ${data.length} stars from offline catalog`);
+      StatusUI.show(`📦 Offline mode: ${data.length.toLocaleString()} stars loaded`, 'warn');
+      setTimeout(() => StatusUI.hide(), 2500);
+      return { stars: data, count: data.length, cached: false, offline: true };
+    } catch (fallbackErr) {
+      console.error('❌ Failed to load offline catalog:', fallbackErr);
+      StatusUI.show('❌ Failed to load star catalog. Check backend or offline data.', 'error');
+      throw fallbackErr;
+    }
+  }
+}
+
+// Bind retry button
+StatusUI.onRetry(() => {
+  console.log('🔄 Retrying...');
+  window.location.reload();
+});
+
+// ========== Main Viewer Class ==========
 class CosmicWebViewer {
   constructor() {
     console.log("🌌 Starting Cosmic Web Viewer with Live Gaia DR3...");
@@ -75,6 +165,11 @@ class CosmicWebViewer {
     this.brightStarCatalog = [];
     this.catalogLoaded = false;
 
+    // CLEAN navigation system (video game style)
+    this.navigationTarget = null; // {position: Vector3, lookAt: Vector3}
+    this.navigationSpeed = 80; // parsecs per second
+    this.isNavigating = false;
+
     this.init();
   }
 
@@ -110,21 +205,14 @@ class CosmicWebViewer {
       this.updateStatus("Loading ALL Gaia DR3 stars...");
       console.log("🌟 Fetching ALL star catalog (mag < 7.0)...");
 
-      // Load ALL stars - distance scaling will handle visual clarity
-      const url = `${this.apiUrl}/api/stars/bright-catalog?mag_limit=7.0`;
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-
-      const data = await response.json();
+      // Use fallback-enabled fetch
+      const data = await fetchBrightCatalogWithFallback(7.0);
 
       console.log(
         `✅ Loaded ${
-          data.count
-        } stars from Gaia DR3 (${data.query_time_ms.toFixed(0)}ms, cached: ${
-          data.cached
+          data.count || data.stars?.length || 0
+        } stars from Gaia DR3 (${data.query_time_ms ? data.query_time_ms.toFixed(0) + 'ms' : 'offline'}, cached: ${
+          data.cached || false
         })`
       );
 
@@ -135,7 +223,7 @@ class CosmicWebViewer {
       });
 
       this.galaxyData = this.brightStarCatalog;
-      this.loadedStarCount = data.count;
+      this.loadedStarCount = data.count || data.stars?.length || 0;
       this.catalogLoaded = true;
 
       // Render the full sky
@@ -188,6 +276,7 @@ class CosmicWebViewer {
     // Track mouse state for click detection
     let mouseDownTime = 0;
     let mouseDownPos = { x: 0, y: 0 };
+    let isDragging = false; // Track if user is actually dragging
 
     canvas.addEventListener("mousedown", (e) => {
       this.isMouseDown = true;
@@ -195,21 +284,30 @@ class CosmicWebViewer {
       this.mouseY = e.clientY;
       mouseDownTime = Date.now();
       mouseDownPos = { x: e.clientX, y: e.clientY };
+      isDragging = false; // Reset drag flag
       canvas.style.cursor = "grabbing";
     });
 
     canvas.addEventListener("mouseup", (e) => {
       const clickDuration = Date.now() - mouseDownTime;
       const mouseMoved =
-        Math.abs(e.clientX - mouseDownPos.x) > 5 ||
-        Math.abs(e.clientY - mouseDownPos.y) > 5;
+        Math.abs(e.clientX - mouseDownPos.x) > 3 ||
+        Math.abs(e.clientY - mouseDownPos.y) > 3;
 
       // If mouse didn't move much and click was quick, it's a click (not a drag)
-      if (clickDuration < 200 && !mouseMoved) {
+      if (clickDuration < 300 && !isDragging && !mouseMoved) {
         this.handleStarClick(e);
       }
 
       this.isMouseDown = false;
+      isDragging = false;
+      canvas.style.cursor = "grab";
+    });
+    
+    // Also handle mouse leave to reset cursor
+    canvas.addEventListener("mouseleave", () => {
+      this.isMouseDown = false;
+      isDragging = false;
       canvas.style.cursor = "grab";
     });
 
@@ -218,6 +316,15 @@ class CosmicWebViewer {
 
       const deltaX = e.clientX - this.mouseX;
       const deltaY = e.clientY - this.mouseY;
+      
+      // Only start dragging if mouse moved more than threshold
+      const totalMovement = Math.abs(e.clientX - mouseDownPos.x) + Math.abs(e.clientY - mouseDownPos.y);
+      if (totalMovement > 3) {
+        isDragging = true;
+      }
+      
+      // Only rotate camera if we're actually dragging
+      if (!isDragging) return;
 
       // Accumulate target rotation (smooth)
       const rotateSpeed = 0.002;
@@ -286,8 +393,8 @@ class CosmicWebViewer {
 
   // Update keyboard movement (free-flight WASD controls with smooth acceleration)
   updateKeyboardControls(delta) {
-    // Don't apply keyboard controls during camera animation
-    if (this.isAnimating) {
+    // Don't apply keyboard controls during navigation
+    if (this.isNavigating) {
       this.currentVelocity.set(0, 0, 0);
       this.targetVelocity.set(0, 0, 0);
       return;
@@ -637,13 +744,16 @@ class CosmicWebViewer {
         b: color[2],
         magnitude: star.magnitude || 10.0,
         distance: distance,
-        // Store original data for future use
+        distance_ly: distance * 3.26156,
+        // Store ALL original data for search/info panel
         source_id: star.source_id,
         ra: star.ra,
         dec: star.dec,
-        parallax: star.parallax,
-        pmra: star.pm_ra,
-        pmdec: star.pm_dec,
+        parallax_mas: star.parallax,
+        pmra_mas_yr: star.pm_ra,
+        pmdec_mas_yr: star.pm_dec,
+        phot_g_mean_mag: star.magnitude,
+        bp_rp: star.color_bp_rp,
       });
     }
 
@@ -902,19 +1012,22 @@ class CosmicWebViewer {
       this.starMaterial.uniforms.time.value = now / 1000.0; // Time in seconds
     }
 
+    // VIDEO GAME STYLE: Update navigation FIRST
+    this.updateNavigation(delta);
+
     // Update smooth camera rotation
     this.updateSmoothRotation();
 
-    // Update keyboard controls (free-flight movement)
-    this.updateKeyboardControls(delta);
+    // Update keyboard controls ONLY if not navigating
+    if (!this.isNavigating) {
+      this.updateKeyboardControls(delta);
+    }
 
     // Update HUD data
     this.updateHUD(delta);
 
     // Update star labels (every frame for smooth tracking)
     this.updateStarLabels();
-
-    // No longer reload stars on camera movement - we have the full sky loaded!
 
     // Render
     this.renderer.render(this.scene, this.camera);
@@ -1042,6 +1155,67 @@ class CosmicWebViewer {
     console.log(`Star labels ${this.showStarLabels ? "visible" : "hidden"}`);
   }
 
+  // Search stars by name or Gaia ID
+  searchStars(query) {
+    if (!query || query.length < 2) return [];
+    
+    const queryLower = query.toLowerCase();
+    const matches = [];
+    
+    console.log(`🔍 Searching for: "${query}"`);
+    
+    // Search through galaxy data
+    for (let i = 0; i < this.galaxyData.length; i++) {
+      const star = this.galaxyData[i];
+      
+      // Check famous star names
+      let starName = null;
+      let score = 0;
+      
+      if (this.famousStars && star.source_id && this.famousStars[star.source_id]) {
+        starName = this.famousStars[star.source_id].name;
+        const nameLower = starName.toLowerCase();
+        
+        // Exact match
+        if (nameLower === queryLower) {
+          score = 100;
+        }
+        // Starts with
+        else if (nameLower.startsWith(queryLower)) {
+          score = 90;
+        }
+        // Contains
+        else if (nameLower.includes(queryLower)) {
+          score = 80;
+        }
+      }
+      
+      // Also check Gaia ID
+      if (star.source_id) {
+        const gaiaID = star.source_id.toString();
+        if (gaiaID.includes(query)) {
+          score = Math.max(score, 70);
+          if (!starName) {
+            starName = `Gaia ${gaiaID.slice(-6)}`;
+          }
+        }
+      }
+      
+      if (score > 0) {
+        matches.push({ star, name: starName, score });
+      }
+      
+      // Limit results
+      if (matches.length >= 50) break;
+    }
+    
+    // Sort by score (highest first)
+    matches.sort((a, b) => b.score - a.score);
+    
+    console.log(`  Found ${matches.length} matches`);
+    return matches.slice(0, 10); // Return top 10
+  }
+
   async loadSolarSystem() {
     try {
       const module = await import("./solar-system.js");
@@ -1102,37 +1276,22 @@ class CosmicWebViewer {
         const solarObj = solarObjects[clickedIndex];
 
         if (solarObj) {
-          const targetPos = new THREE.Vector3(
-            solarObj.x * this.solarSystemScale,
-            solarObj.y * this.solarSystemScale,
-            solarObj.z * this.solarSystemScale
-          );
+          const starData = {
+            x: solarObj.x * this.solarSystemScale,
+            y: solarObj.y * this.solarSystemScale,
+            z: solarObj.z * this.solarSystemScale
+          };
 
-          console.log(
-            `🎯 Navigating to ${solarObj.name} at (${targetPos.x.toFixed(
-              1
-            )}, ${targetPos.y.toFixed(1)}, ${targetPos.z.toFixed(1)}) pc`
-          );
-
-          // Fly towards the planet (stop 1 parsec away)
-          const direction = targetPos
-            .clone()
-            .sub(this.camera.position)
-            .normalize();
-          const distance = this.camera.position.distanceTo(targetPos);
-          const flyDistance = Math.max(distance - 1, 0); // Stop 1pc away
-
-          const destination = this.camera.position
-            .clone()
-            .add(direction.multiplyScalar(flyDistance));
-          this.animateCameraTo(destination, 1500);
+          console.log(`🎯 Clicked on ${solarObj.name}`);
+          
+          // Use new video game navigation system
+          this.navigateToStar(starData);
         }
       } else {
         // It's a regular star
         const star = this.galaxyData[clickedIndex];
 
         if (star) {
-          const targetPos = new THREE.Vector3(star.x, star.y, star.z);
           const starInfo = this.famousStars
             ? this.famousStars[star.source_id]
             : null;
@@ -1140,55 +1299,103 @@ class CosmicWebViewer {
             ? starInfo.name
             : `Gaia ${star.source_id.toString().slice(-6)}`;
 
-          console.log(
-            `🎯 Navigating to ${starName} at (${star.x.toFixed(
-              1
-            )}, ${star.y.toFixed(1)}, ${star.z.toFixed(1)}) pc`
-          );
-
-          // Fly towards the star (stop 10 parsecs away for better viewing)
-          const direction = targetPos
-            .clone()
-            .sub(this.camera.position)
-            .normalize();
-          const distance = this.camera.position.distanceTo(targetPos);
-          const flyDistance = Math.max(distance - 10, 0); // Stop 10pc away
-
-          const destination = this.camera.position
-            .clone()
-            .add(direction.multiplyScalar(flyDistance));
-          this.animateCameraTo(destination, 1500);
+          console.log(`🎯 Clicked on ${starName}`);
+          
+          // Use new video game navigation system
+          this.navigateToStar(star);
+          
+          // Open info panel (selectStar is a global function, not a method)
+          if (typeof selectStar === 'function') {
+            selectStar(star, starName);
+          }
         }
       }
     }
   }
 
-  // Smooth camera animation to target position
-  animateCameraTo(targetPos, duration = 1000) {
-    const startPos = this.camera.position.clone();
-    const startTime = Date.now();
-
-    // Disable keyboard controls during animation to prevent elastic effect
-    this.isAnimating = true;
-
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-
-      // Ease-out cubic for smooth deceleration
-      const eased = 1 - Math.pow(1 - progress, 3);
-
-      this.camera.position.lerpVectors(startPos, targetPos, eased);
-
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        // Re-enable keyboard controls after animation
-        this.isAnimating = false;
-      }
+  // VIDEO GAME STYLE: Navigate to star (clean, simple, works)
+  navigateToStar(star) {
+    console.log(`� Navigate to star:`, star);
+    
+    // Calculate target position (5 parsecs away from star)
+    const starPos = new THREE.Vector3(star.x, star.y, star.z);
+    const viewDistance = 5;
+    
+    // Reset cursor to prevent stuck "grabbing" state
+    if (this.renderer && this.renderer.domElement) {
+      this.renderer.domElement.style.cursor = "grab";
+    }
+    
+    // Get direction from origin to star, then position camera back from it
+    const dirFromOrigin = starPos.clone().normalize();
+    const cameraTarget = starPos.clone().sub(dirFromOrigin.multiplyScalar(viewDistance));
+    
+    console.log(`🎯 Target: camera at (${cameraTarget.x.toFixed(1)}, ${cameraTarget.y.toFixed(1)}, ${cameraTarget.z.toFixed(1)}), looking at star (${starPos.x.toFixed(1)}, ${starPos.y.toFixed(1)}, ${starPos.z.toFixed(1)})`);
+    
+    // Set navigation target
+    this.navigationTarget = {
+      position: cameraTarget,
+      lookAt: starPos
     };
-
-    animate();
+    this.isNavigating = true;
+    
+    // STOP all keyboard movement
+    this.currentVelocity.set(0, 0, 0);
+    this.targetVelocity.set(0, 0, 0);
+  }
+  
+  // VIDEO GAME STYLE: Update navigation (called every frame)
+  updateNavigation(delta) {
+    if (!this.navigationTarget || !this.isNavigating) return;
+    
+    const target = this.navigationTarget.position;
+    const distanceToTarget = this.camera.position.distanceTo(target);
+    
+    // If close enough, snap to target and complete
+    if (distanceToTarget < 0.5) {
+      this.camera.position.copy(target);
+      this.camera.lookAt(this.navigationTarget.lookAt);
+      
+      // Update rotation targets
+      this.targetRotationX = this.camera.rotation.x;
+      this.targetRotationY = this.camera.rotation.y;
+      this.rotationX = this.targetRotationX;
+      this.rotationY = this.targetRotationY;
+      
+      console.log(`✅ Navigation complete! Camera at (${this.camera.position.x.toFixed(1)}, ${this.camera.position.y.toFixed(1)}, ${this.camera.position.z.toFixed(1)})`);
+      
+      this.navigationTarget = null;
+      this.isNavigating = false;
+      this.currentVelocity.set(0, 0, 0);
+      this.targetVelocity.set(0, 0, 0);
+      return;
+    }
+    
+    // Move toward target with smooth deceleration near the end
+    const direction = target.clone().sub(this.camera.position).normalize();
+    
+    // Smooth easing: slow down when within 20 parsecs of target
+    const slowdownDistance = 20;
+    let speedMultiplier = 1.0;
+    if (distanceToTarget < slowdownDistance) {
+      // Smooth deceleration curve (ease-out)
+      speedMultiplier = Math.pow(distanceToTarget / slowdownDistance, 0.5); // Square root for smooth curve
+      speedMultiplier = Math.max(0.15, speedMultiplier); // Minimum 15% speed to avoid too slow
+    }
+    
+    const moveDistance = this.navigationSpeed * speedMultiplier * delta;
+    
+    // Don't overshoot
+    const actualMove = Math.min(moveDistance, distanceToTarget);
+    this.camera.position.add(direction.multiplyScalar(actualMove));
+    
+    // Smoothly look toward the star as we approach
+    const lookAtTarget = this.navigationTarget.lookAt;
+    this.camera.lookAt(lookAtTarget);
+    
+    // Smooth the rotation update
+    this.targetRotationX = this.camera.rotation.x;
+    this.targetRotationY = this.camera.rotation.y;
   }
 
   createSolarSystemPoints() {
@@ -1468,22 +1675,49 @@ class CosmicWebViewer {
       });
 
       // Make label clickable - navigate to star/planet
-      labelEl.addEventListener("click", () => {
+      labelEl.addEventListener("click", (e) => {
+        e.stopPropagation(); // Prevent click from falling through to canvas
+        
         if (label.position) {
-          const direction = label.position
-            .clone()
-            .sub(this.camera.position)
-            .normalize();
-          const distance = this.camera.position.distanceTo(label.position);
-          const stopDistance = label.type === "solar-system" ? 1 : 10; // Stop closer for planets
-          const flyDistance = Math.max(distance - stopDistance, 0);
-
-          const destination = this.camera.position
-            .clone()
-            .add(direction.multiplyScalar(flyDistance));
-          this.animateCameraTo(destination, 1500);
-
-          console.log(`🎯 Navigating to ${label.name} (clicked on label)`);
+          // Find the actual star data for this label
+          let starData = null;
+          
+          if (label.type === "solar-system") {
+            // Solar system object
+            starData = {
+              x: label.position.x,
+              y: label.position.y,
+              z: label.position.z
+            };
+          } else {
+            // Regular star - find in galaxy data by position
+            const labelPos = label.position;
+            starData = this.galaxyData.find(star => {
+              const dist = Math.sqrt(
+                Math.pow(star.x - labelPos.x, 2) +
+                Math.pow(star.y - labelPos.y, 2) +
+                Math.pow(star.z - labelPos.z, 2)
+              );
+              return dist < 0.1; // Close enough match
+            });
+            
+            if (!starData) {
+              // Fallback to position-based navigation
+              starData = {
+                x: labelPos.x,
+                y: labelPos.y,
+                z: labelPos.z
+              };
+            }
+          }
+          
+          console.log(`🏷️ Clicked label: ${label.name}`);
+          this.navigateToStar(starData);
+          
+          // Open info panel if it's a regular star (selectStar is global function)
+          if (label.type !== "solar-system" && starData.source_id && typeof selectStar === 'function') {
+            selectStar(starData, label.name);
+          }
         }
       });
 
@@ -1504,6 +1738,204 @@ class CosmicWebViewer {
 // Initialize when page loads
 window.addEventListener("DOMContentLoaded", () => {
   const viewer = new CosmicWebViewer();
+
+  // ========== Search Bar & Info Panel ==========
+  const searchInput = document.getElementById("star-search");
+  const searchResults = document.getElementById("search-results");
+  const infoPanel = document.getElementById("info-panel");
+  const infoStarName = document.getElementById("info-star-name");
+  const infoContent = document.getElementById("info-content");
+  const infoClose = document.getElementById("info-close");
+
+  console.log("🔍 Search components:", { searchInput, searchResults, infoPanel, infoStarName, infoContent, infoClose });
+
+  let searchTimeout = null;
+  let selectedStar = null;
+
+  // Search functionality
+  if (searchInput && searchResults) {
+    searchInput.addEventListener("input", (e) => {
+      const query = e.target.value.trim().toLowerCase();
+      
+      if (query.length < 2) {
+        searchResults.style.display = "none";
+        return;
+      }
+
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        const matches = viewer.searchStars(query);
+        displaySearchResults(matches);
+      }, 200);
+    });
+
+    // Clear search on escape
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        searchInput.value = "";
+        searchResults.style.display = "none";
+      }
+    });
+  }
+
+  function displaySearchResults(matches) {
+    console.log(`📊 Displaying ${matches.length} search results`);
+    
+    if (!matches || matches.length === 0) {
+      searchResults.innerHTML = '<div style="padding:12px;color:#90a4ae;text-align:center;">No stars found</div>';
+      searchResults.style.display = "block";
+      return;
+    }
+
+    const html = matches.slice(0, 10).map(match => {
+      const distLy = match.star.distance_ly || (match.star.parallax_mas > 0 ? (3.26156 * 1000 / match.star.parallax_mas) : 0);
+      const distStr = distLy < 100 ? distLy.toFixed(1) : distLy.toFixed(0);
+      const magStr = match.star.phot_g_mean_mag?.toFixed(2) || match.star.magnitude?.toFixed(2) || "—";
+      
+      console.log(`  ⭐ ${match.name}: ${distStr} ly, mag ${magStr}`);
+      
+      return `
+        <div class="search-result-item" data-star-id="${match.star.source_id}" 
+             style="padding:10px 12px;border-bottom:1px solid rgba(100,181,246,0.1);cursor:pointer;transition:all 0.2s;"
+             onmouseover="this.style.background='rgba(100,181,246,0.15)'"
+             onmouseout="this.style.background='transparent'">
+          <div style="color:#64b5f6;font-weight:600;margin-bottom:3px;">${match.name}</div>
+          <div style="color:#90a4ae;font-size:11px;">
+            ${distStr} ly • mag ${magStr}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    searchResults.innerHTML = html;
+    searchResults.style.display = "block";
+
+    // Bind click events
+    document.querySelectorAll('.search-result-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const sourceId = item.dataset.starId;
+        const match = matches.find(m => m.star.source_id.toString() === sourceId);
+        if (match) {
+          console.log(`🔍 Search selected: ${match.name}`);
+          
+          // Navigate to the star immediately
+          viewer.navigateToStar(match.star);
+          
+          // Also open info panel
+          selectStar(match.star, match.name);
+          
+          // Clear search
+          searchInput.value = "";
+          searchResults.style.display = "none";
+        }
+      });
+    });
+  }
+
+  function selectStar(star, name) {
+    selectedStar = { star, name };
+    
+    console.log(`📋 Opening info panel for: ${name}`, star);
+    
+    // Show info panel
+    if (infoPanel && infoStarName && infoContent) {
+      infoStarName.textContent = name;
+      
+      const distPc = star.parallax_mas > 0 ? (1000 / star.parallax_mas) : (star.distance || 0);
+      const distLy = distPc * 3.26156;
+      const distStr = distLy < 100 ? `${distLy.toFixed(2)} ly (${distPc.toFixed(2)} pc)` : 
+                                     `${distLy.toFixed(0)} ly (${distPc.toFixed(0)} pc)`;
+      
+      const appMag = star.phot_g_mean_mag?.toFixed(2) || star.magnitude?.toFixed(2) || "—";
+      const absMag = (star.phot_g_mean_mag || star.magnitude) ? 
+        ((star.phot_g_mean_mag || star.magnitude) - 5 * Math.log10(distPc / 10)).toFixed(2) : "—";
+      
+      const colorIndex = star.bp_rp?.toFixed(2) || "—";
+      let spectralClass = "Unknown";
+      let spectralColor = "#999";
+      if (star.bp_rp !== undefined) {
+        if (star.bp_rp < 0.0) { 
+          spectralClass = "O-B (Blue)"; 
+          spectralColor = "#88bbff";
+        } else if (star.bp_rp < 0.5) { 
+          spectralClass = "A-F (White)"; 
+          spectralColor = "#cce5ff";
+        } else if (star.bp_rp < 1.0) { 
+          spectralClass = "F-G (Yellow-White)"; 
+          spectralColor = "#fff3b0";
+        } else if (star.bp_rp < 1.5) { 
+          spectralClass = "G-K (Yellow-Orange)"; 
+          spectralColor = "#ffd494";
+        } else { 
+          spectralClass = "K-M (Orange-Red)"; 
+          spectralColor = "#ffaa66";
+        }
+      }
+      
+      const pmra = star.pmra_mas_yr?.toFixed(2) || "—";
+      const pmdec = star.pmdec_mas_yr?.toFixed(2) || "—";
+      
+      infoContent.innerHTML = `
+        <div style="background:rgba(100,181,246,0.08);padding:12px;border-radius:8px;margin-bottom:12px;">
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:10px 14px;">
+            <span style="color:#64b5f6;font-weight:600;">📍 Distance:</span>
+            <span style="color:#fff;font-weight:500;">${distStr}</span>
+            
+            <span style="color:#64b5f6;font-weight:600;">✨ Apparent Mag:</span>
+            <span style="color:#fff;font-weight:500;">${appMag}</span>
+            
+            <span style="color:#64b5f6;font-weight:600;">💫 Absolute Mag:</span>
+            <span style="color:#fff;font-weight:500;">${absMag}</span>
+            
+            <span style="color:#64b5f6;font-weight:600;">🎨 Color Index:</span>
+            <span style="color:#fff;font-weight:500;">${colorIndex}</span>
+            
+            <span style="color:#64b5f6;font-weight:600;">🌟 Spectral Type:</span>
+            <span style="color:${spectralColor};font-weight:600;">${spectralClass}</span>
+            
+            <span style="color:#64b5f6;font-weight:600;">🚀 Proper Motion:</span>
+            <span style="color:#fff;font-size:12px;">RA: ${pmra}, Dec: ${pmdec} mas/yr</span>
+          </div>
+        </div>
+        <div style="font-size:11px;color:#90a4ae;margin-bottom:12px;">
+          Gaia DR3: ${star.source_id}
+        </div>
+        <button id="navigate-to-star" style="width:100%;padding:12px;
+          background:linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);border:none;
+          border-radius:8px;color:#fff;cursor:pointer;font-size:14px;font-weight:700;
+          transition:all 0.3s;box-shadow:0 2px 8px rgba(66,165,245,0.4);
+          text-shadow:0 1px 2px rgba(0,0,0,0.3);"
+          onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(66,165,245,0.6)'"
+          onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 8px rgba(66,165,245,0.4)'">
+          🚀 Navigate to ${name}
+        </button>
+      `;
+      
+      infoPanel.style.display = "block";
+      console.log(`✅ Info panel displayed successfully`);
+      
+      // Bind navigate button
+      const navBtn = document.getElementById("navigate-to-star");
+      if (navBtn) {
+        navBtn.addEventListener("click", () => {
+          console.log(`🚀 Navigate button clicked for ${name}`);
+          viewer.navigateToStar(star);
+        });
+      } else {
+        console.error("❌ Navigate button not found!");
+      }
+    } else {
+      console.error(`❌ Info panel elements not found:`, { infoPanel, infoStarName, infoContent });
+    }
+  }
+
+  // Close info panel
+  if (infoClose) {
+    infoClose.addEventListener("click", () => {
+      if (infoPanel) infoPanel.style.display = "none";
+      selectedStar = null;
+    });
+  }
 
   // Wire up reset camera button
   const resetBtn = document.getElementById("resetCamera");
