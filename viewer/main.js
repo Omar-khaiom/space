@@ -1326,11 +1326,18 @@ class CosmicWebViewer {
       this.renderer.domElement.style.cursor = "grab";
     }
     
-    // Get direction from origin to star, then position camera back from it
-    const dirFromOrigin = starPos.clone().normalize();
-    const cameraTarget = starPos.clone().sub(dirFromOrigin.multiplyScalar(viewDistance));
+    // Calculate approach direction: from camera toward star
+    const currentPos = this.camera.position.clone();
+    const directionToStar = starPos.clone().sub(currentPos).normalize();
+    
+    // Target position: stop 5 parsecs BEFORE the star (along approach direction)
+    // IMPORTANT: Clone direction before scaling to avoid mutation!
+    const offset = directionToStar.clone().multiplyScalar(viewDistance);
+    const cameraTarget = starPos.clone().sub(offset);
     
     console.log(`🎯 Target: camera at (${cameraTarget.x.toFixed(1)}, ${cameraTarget.y.toFixed(1)}, ${cameraTarget.z.toFixed(1)}), looking at star (${starPos.x.toFixed(1)}, ${starPos.y.toFixed(1)}, ${starPos.z.toFixed(1)})`);
+    console.log(`📍 Current: (${currentPos.x.toFixed(1)}, ${currentPos.y.toFixed(1)}, ${currentPos.z.toFixed(1)})`);
+    console.log(`📏 Distance: ${currentPos.distanceTo(cameraTarget).toFixed(1)} parsecs`);
     
     // Set navigation target
     this.navigationTarget = {
@@ -1344,17 +1351,18 @@ class CosmicWebViewer {
     this.targetVelocity.set(0, 0, 0);
   }
   
-  // VIDEO GAME STYLE: Update navigation (called every frame)
+  // VIDEO GAME STYLE: Update navigation (constant velocity with deceleration)
   updateNavigation(delta) {
     if (!this.navigationTarget || !this.isNavigating) return;
     
     const target = this.navigationTarget.position;
+    const lookAt = this.navigationTarget.lookAt;
     const distanceToTarget = this.camera.position.distanceTo(target);
     
-    // If close enough, snap to target and complete
-    if (distanceToTarget < 0.5) {
+    // Complete when very close - clean snap
+    if (distanceToTarget < 0.1) {
       this.camera.position.copy(target);
-      this.camera.lookAt(this.navigationTarget.lookAt);
+      this.camera.lookAt(lookAt);
       
       // Update rotation targets
       this.targetRotationX = this.camera.rotation.x;
@@ -1371,29 +1379,29 @@ class CosmicWebViewer {
       return;
     }
     
-    // Move toward target with smooth deceleration near the end
+    // Calculate direction (camera to target)
     const direction = target.clone().sub(this.camera.position).normalize();
     
-    // Smooth easing: slow down when within 20 parsecs of target
-    const slowdownDistance = 20;
-    let speedMultiplier = 1.0;
-    if (distanceToTarget < slowdownDistance) {
-      // Smooth deceleration curve (ease-out)
-      speedMultiplier = Math.pow(distanceToTarget / slowdownDistance, 0.5); // Square root for smooth curve
-      speedMultiplier = Math.max(0.15, speedMultiplier); // Minimum 15% speed to avoid too slow
+    // Calculate speed with simple deceleration
+    let speed = this.navigationSpeed; // Base: 80 pc/s
+    
+    // Deceleration zone: smooth slowdown at < 20 parsecs
+    if (distanceToTarget < 20) {
+      // Square root curve for natural deceleration
+      const slowdownFactor = Math.pow(distanceToTarget / 20, 0.5);
+      speed = this.navigationSpeed * Math.max(0.15, slowdownFactor); // Min 15% speed
     }
     
-    const moveDistance = this.navigationSpeed * speedMultiplier * delta;
-    
-    // Don't overshoot
+    // Move toward target at calculated speed
+    const moveDistance = speed * delta;
     const actualMove = Math.min(moveDistance, distanceToTarget);
-    this.camera.position.add(direction.multiplyScalar(actualMove));
+    const moveVector = direction.clone().multiplyScalar(actualMove);
+    this.camera.position.add(moveVector);
     
-    // Smoothly look toward the star as we approach
-    const lookAtTarget = this.navigationTarget.lookAt;
-    this.camera.lookAt(lookAtTarget);
+    // Direct lookAt for smooth rotation
+    this.camera.lookAt(lookAt);
     
-    // Smooth the rotation update
+    // Update rotation tracking for orbit controls
     this.targetRotationX = this.camera.rotation.x;
     this.targetRotationY = this.camera.rotation.y;
   }
@@ -1876,54 +1884,45 @@ window.addEventListener("DOMContentLoaded", () => {
       const pmdec = star.pmdec_mas_yr?.toFixed(2) || "—";
       
       infoContent.innerHTML = `
-        <div style="background:rgba(100,181,246,0.08);padding:12px;border-radius:8px;margin-bottom:12px;">
-          <div style="display:grid;grid-template-columns:auto 1fr;gap:10px 14px;">
-            <span style="color:#64b5f6;font-weight:600;">📍 Distance:</span>
-            <span style="color:#fff;font-weight:500;">${distStr}</span>
-            
-            <span style="color:#64b5f6;font-weight:600;">✨ Apparent Mag:</span>
-            <span style="color:#fff;font-weight:500;">${appMag}</span>
-            
-            <span style="color:#64b5f6;font-weight:600;">💫 Absolute Mag:</span>
-            <span style="color:#fff;font-weight:500;">${absMag}</span>
-            
-            <span style="color:#64b5f6;font-weight:600;">🎨 Color Index:</span>
-            <span style="color:#fff;font-weight:500;">${colorIndex}</span>
-            
-            <span style="color:#64b5f6;font-weight:600;">🌟 Spectral Type:</span>
-            <span style="color:${spectralColor};font-weight:600;">${spectralClass}</span>
-            
-            <span style="color:#64b5f6;font-weight:600;">🚀 Proper Motion:</span>
-            <span style="color:#fff;font-size:12px;">RA: ${pmra}, Dec: ${pmdec} mas/yr</span>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 12px;font-size:13px;">
+          <span style="color:#64b5f6;">📍</span>
+          <div>
+            <div style="color:#90caf9;font-size:11px;opacity:0.7;">Distance</div>
+            <div style="color:#fff;font-weight:500;">${distStr}</div>
+          </div>
+          
+          <span style="color:#ffa726;">✨</span>
+          <div>
+            <div style="color:#ffb74d;font-size:11px;opacity:0.7;">Apparent Mag</div>
+            <div style="color:#fff;font-weight:500;">${appMag}</div>
+          </div>
+          
+          <span style="color:#ab47bc;">💫</span>
+          <div>
+            <div style="color:#ba68c8;font-size:11px;opacity:0.7;">Absolute Mag</div>
+            <div style="color:#fff;font-weight:500;">${absMag}</div>
+          </div>
+          
+          <span style="color:#26c6da;">🌟</span>
+          <div>
+            <div style="color:#4dd0e1;font-size:11px;opacity:0.7;">Spectral Type</div>
+            <div style="color:${spectralColor};font-weight:600;">${spectralClass}</div>
+          </div>
+          
+          <span style="color:#66bb6a;">🚀</span>
+          <div>
+            <div style="color:#81c784;font-size:11px;opacity:0.7;">Proper Motion</div>
+            <div style="color:#fff;font-size:11px;">RA: ${pmra} • Dec: ${pmdec} mas/yr</div>
           </div>
         </div>
-        <div style="font-size:11px;color:#90a4ae;margin-bottom:12px;">
-          Gaia DR3: ${star.source_id}
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.1);
+                    font-size:10px;color:#546e7a;text-align:center;">
+          ${star.source_id}
         </div>
-        <button id="navigate-to-star" style="width:100%;padding:12px;
-          background:linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);border:none;
-          border-radius:8px;color:#fff;cursor:pointer;font-size:14px;font-weight:700;
-          transition:all 0.3s;box-shadow:0 2px 8px rgba(66,165,245,0.4);
-          text-shadow:0 1px 2px rgba(0,0,0,0.3);"
-          onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(66,165,245,0.6)'"
-          onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 8px rgba(66,165,245,0.4)'">
-          🚀 Navigate to ${name}
-        </button>
       `;
       
       infoPanel.style.display = "block";
       console.log(`✅ Info panel displayed successfully`);
-      
-      // Bind navigate button
-      const navBtn = document.getElementById("navigate-to-star");
-      if (navBtn) {
-        navBtn.addEventListener("click", () => {
-          console.log(`🚀 Navigate button clicked for ${name}`);
-          viewer.navigateToStar(star);
-        });
-      } else {
-        console.error("❌ Navigate button not found!");
-      }
     } else {
       console.error(`❌ Info panel elements not found:`, { infoPanel, infoStarName, infoContent });
     }

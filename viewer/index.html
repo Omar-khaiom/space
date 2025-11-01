@@ -8,10 +8,31 @@
         body {
             margin: 0;
             padding: 0;
-            background: radial-gradient(circle at center, #0a0a2e 0%, #000000 70%);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #000000;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Display', sans-serif;
             overflow: hidden;
             color: #ffffff;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        @keyframes slideIn {
+            from { 
+                opacity: 0; 
+                transform: translateY(-20px) scale(0.95); 
+            }
+            to { 
+                opacity: 1; 
+                transform: translateY(0) scale(1); 
+            }
+        }
+        
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 5px rgba(100, 181, 246, 0.3); }
+            50% { box-shadow: 0 0 20px rgba(100, 181, 246, 0.6), 0 0 30px rgba(100, 181, 246, 0.3); }
         }
         
         canvas {
@@ -27,21 +48,34 @@
             position: absolute;
             top: 20px;
             left: 20px;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 20px;
-            border-radius: 12px;
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            min-width: 280px;
-            max-width: 320px;
+            background: rgba(5, 10, 20, 0.65);
+            padding: 16px 18px;
+            border-radius: 16px;
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(100, 181, 246, 0.15);
+            min-width: 260px;
+            max-width: 300px;
             z-index: 1000;
-            transition: all 0.3s ease;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 
+                        0 0 0 1px rgba(255, 255, 255, 0.03),
+                        0 0 20px rgba(100, 181, 246, 0.15);
+            animation: slideIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        
+        #hud:hover {
+            border-color: rgba(100, 181, 246, 0.4);
+            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7), 
+                        0 0 0 1px rgba(100, 181, 246, 0.1),
+                        0 0 30px rgba(100, 181, 246, 0.3),
+                        inset 0 0 20px rgba(100, 181, 246, 0.05);
         }
         
         #hud.minimized {
-            padding: 10px 15px;
+            padding: 8px 12px;
             min-width: auto;
+            border-radius: 12px;
         }
         
         #hud.minimized .hud-content {
@@ -56,45 +90,61 @@
         }
         
         .minimize-btn {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            color: #64b5f6;
-            padding: 4px 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(100, 181, 246, 0.2);
+            color: #90caf9;
+            padding: 3px 7px;
             border-radius: 6px;
             cursor: pointer;
             font-size: 16px;
-            transition: all 0.2s;
-            width: 32px;
-            height: 32px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 28px;
+            height: 28px;
             display: flex;
             align-items: center;
             justify-content: center;
+            line-height: 1;
         }
         
         .minimize-btn:hover {
-            background: rgba(100, 181, 246, 0.2);
-            border-color: #64b5f6;
+            background: rgba(100, 181, 246, 0.12);
+            border-color: rgba(100, 181, 246, 0.4);
+            color: #64b5f6;
+            transform: scale(1.05);
         }
         
         #hud h3 {
             margin-top: 0;
-            color: #64b5f6;
-            text-shadow: 0 0 15px rgba(100, 181, 246, 0.6);
-            font-size: 20px;
+            margin-bottom: 0;
+            background: linear-gradient(135deg, #64b5f6 0%, #42a5f5 25%, #90caf9 50%, #4fc3f7 75%, #64b5f6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            background-size: 200% 200%;
+            font-size: 17px;
             font-weight: 600;
-            letter-spacing: 1px;
+            letter-spacing: 0.3px;
+            animation: gradientShift 4s ease infinite;
+            filter: drop-shadow(0 0 8px rgba(100, 181, 246, 0.5));
         }
         
         .status {
             color: #81c784;
-            font-weight: 500;
-            margin-bottom: 15px;
-            font-size: 13px;
-            padding: 8px;
-            background: rgba(129, 199, 132, 0.1);
-            border-radius: 6px;
-            border-left: 3px solid #81c784;
+            font-weight: 400;
+            margin: 12px 0;
+            font-size: 12px;
+            padding: 8px 10px;
+            background: linear-gradient(135deg, rgba(129, 199, 132, 0.12) 0%, rgba(129, 199, 132, 0.08) 50%, rgba(129, 199, 132, 0.12) 100%);
+            background-size: 200% 200%;
+            border-radius: 8px;
+            border-left: 2px solid rgba(129, 199, 132, 0.6);
+            transition: all 0.3s ease;
+            animation: gradientShift 3s ease infinite;
         }
+        
+        .status:hover {
+            background: linear-gradient(135deg, rgba(129, 199, 132, 0.12) 0%, rgba(129, 199, 132, 0.08) 100%);
+            border-left-color: #81c784;
         }
         
         .control-group {
@@ -121,23 +171,46 @@
         }
         
         button {
-            background: linear-gradient(135deg, #42a5f5 0%, #1976d2 100%);
-            border: none;
-            padding: 10px 18px;
+            background: linear-gradient(135deg, rgba(66, 165, 245, 0.15) 0%, rgba(25, 118, 210, 0.12) 50%, rgba(66, 165, 245, 0.15) 100%);
+            background-size: 200% 200%;
+            border: 1px solid rgba(100, 181, 246, 0.3);
+            padding: 8px 14px;
             border-radius: 8px;
-            color: white;
+            color: #90caf9;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 500;
-            transition: all 0.3s ease;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             flex: 1;
-            box-shadow: 0 2px 8px rgba(66, 165, 245, 0.3);
+            position: relative;
+            overflow: hidden;
+            animation: gradientShift 3s ease infinite;
+        }
+        
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(100, 181, 246, 0.2), transparent);
+            transition: left 0.5s ease;
+        }
+        
+        button:hover::before {
+            left: 100%;
         }
         
         button:hover {
-            background: linear-gradient(135deg, #64b5f6 0%, #2196f3 100%);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(66, 165, 245, 0.5);
+            background: linear-gradient(135deg, rgba(66, 165, 245, 0.25) 0%, rgba(25, 118, 210, 0.2) 50%, rgba(66, 165, 245, 0.25) 100%);
+            background-size: 200% 200%;
+            border-color: rgba(100, 181, 246, 0.6);
+            color: #64b5f6;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(100, 181, 246, 0.3),
+                        0 0 20px rgba(100, 181, 246, 0.2);
+            animation: gradientShift 2s ease infinite, borderGlow 2s ease infinite;
         }
         
         button:active {
@@ -145,27 +218,44 @@
         }
         
         .info-panel {
-            background: rgba(0, 20, 40, 0.7);
-            padding: 12px;
-            border-radius: 8px;
-            margin-top: 15px;
-            border-left: 3px solid #4dd0e1;
+            background: linear-gradient(135deg, rgba(15, 25, 45, 0.35) 0%, rgba(10, 20, 40, 0.3) 50%, rgba(15, 25, 45, 0.35) 100%);
+            background-size: 200% 200%;
+            padding: 10px 12px;
+            border-radius: 10px;
+            margin-top: 12px;
+            border: 1px solid rgba(77, 208, 225, 0.2);
+            transition: all 0.3s ease;
+            animation: gradientShift 4s ease infinite;
+        }
+        
+        .info-panel:hover {
+            background: linear-gradient(135deg, rgba(15, 25, 45, 0.45) 0%, rgba(10, 20, 40, 0.4) 50%, rgba(15, 25, 45, 0.45) 100%);
+            background-size: 200% 200%;
+            border-color: rgba(77, 208, 225, 0.4);
+            box-shadow: 0 0 15px rgba(77, 208, 225, 0.2),
+                        inset 0 0 10px rgba(77, 208, 225, 0.05);
         }
         
         .info-row {
             display: flex;
             justify-content: space-between;
             margin-bottom: 5px;
-            font-size: 12px;
+            font-size: 11px;
+            transition: all 0.2s ease;
+        }
+        
+        .info-row:hover {
+            transform: translateX(2px);
         }
         
         .info-label {
-            color: #90a4ae;
+            color: #78909c;
         }
         
         .info-value {
-            color: #ffffff;
-            font-weight: bold;
+            color: #e1f5fe;
+            font-weight: 500;
+            font-variant-numeric: tabular-nums;
         }
         
         #performance {
@@ -188,8 +278,48 @@
         }
         
         #star-search:focus {
-            border-color: #64b5f6;
-            box-shadow: 0 0 0 2px rgba(100, 181, 246, 0.2);
+            border-color: rgba(100, 181, 246, 0.6);
+            box-shadow: 0 0 0 2px rgba(100, 181, 246, 0.15), 
+                        0 0 20px rgba(100, 181, 246, 0.4),
+                        0 0 40px rgba(100, 181, 246, 0.2);
+            animation: neonGlow 2s ease-in-out infinite;
+        }
+        
+        #info-star-name {
+            background: linear-gradient(135deg, #64b5f6 0%, #90caf9 25%, #4fc3f7 50%, #90caf9 75%, #64b5f6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            background-size: 300% 300%;
+            animation: gradientShift 3s ease-in-out infinite;
+            filter: drop-shadow(0 0 12px rgba(100, 181, 246, 0.6));
+        }
+        
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+        
+        .search-result-item {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+        
+        .search-result-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            width: 3px;
+            height: 0;
+            background: linear-gradient(to bottom, transparent, #64b5f6, #4fc3f7, #64b5f6, transparent);
+            transition: height 0.3s ease;
+            transform: translateY(-50%);
+            box-shadow: 0 0 10px rgba(100, 181, 246, 0.8);
+        }
+        
+        .search-result-item:hover::before {
+            height: 80%;
         }
         
         #search-results::-webkit-scrollbar {
@@ -209,6 +339,25 @@
         #search-results::-webkit-scrollbar-thumb:hover {
             background: rgba(100, 181, 246, 0.7);
         }
+        
+        /* Prevent overlap - adjust info panel when search is active */
+        #info-panel.with-search {
+            max-height: calc(100vh - 400px);
+            overflow-y: auto;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-height: 800px) {
+            #info-panel {
+                bottom: 10px !important;
+                max-height: calc(100vh - 380px);
+                overflow-y: auto;
+            }
+            
+            #search-results {
+                max-height: 250px !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -224,29 +373,31 @@
     </div>
 
     <!-- Search Bar -->
-    <div id="search-container" style="position:fixed;top:20px;right:20px;z-index:1000;width:320px;">
+    <div id="search-container" style="position:fixed;top:20px;right:20px;z-index:1000;width:340px;">
         <input type="text" id="star-search" placeholder="🔍 Search stars (e.g., Vega, Sirius)..." 
-            style="width:100%;padding:12px 16px;background:rgba(0,0,0,0.85);border:2px solid rgba(100,181,246,0.4);
+            style="width:100%;padding:13px 18px;background:rgba(0,0,0,0.85);border:2px solid rgba(100,181,246,0.4);
             border-radius:10px;color:#e8f4ff;font:14px 'Segoe UI',system-ui;outline:none;
-            backdrop-filter:blur(10px);transition:all 0.3s;box-shadow:0 4px 12px rgba(0,0,0,0.5);">
-        <div id="search-results" style="display:none;margin-top:10px;background:rgba(0,0,0,0.92);
-            border:2px solid rgba(100,181,246,0.4);border-radius:10px;max-height:320px;overflow-y:auto;
+            backdrop-filter:blur(10px);transition:all 0.3s;box-shadow:0 4px 12px rgba(0,0,0,0.5);
+            animation: slideIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s backwards;">
+        <div id="search-results" style="display:none;margin-top:12px;background:rgba(0,0,0,0.92);
+            border:2px solid rgba(100,181,246,0.4);border-radius:10px;max-height:300px;overflow-y:auto;
             backdrop-filter:blur(10px);box-shadow:0 4px 16px rgba(0,0,0,0.7);"></div>
     </div>
 
     <!-- Info Panel (appears on star selection) -->
-    <div id="info-panel" style="position:fixed;bottom:20px;right:20px;z-index:1001;width:340px;display:none;
+    <div id="info-panel" style="position:fixed;bottom:20px;right:20px;z-index:1001;width:360px;display:none;
         background:rgba(0,0,0,0.92);border:2px solid rgba(100,181,246,0.5);border-radius:12px;
-        padding:18px;backdrop-filter:blur(12px);box-shadow:0 6px 24px rgba(0,0,0,0.8);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-            <h4 id="info-star-name" style="margin:0;color:#64b5f6;font-size:18px;font-weight:600;text-shadow:0 0 10px rgba(100,181,246,0.5);">Star Info</h4>
+        padding:20px;backdrop-filter:blur(12px);box-shadow:0 6px 24px rgba(0,0,0,0.8);
+        animation: slideIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h4 id="info-star-name" style="margin:0;color:#64b5f6;font-size:19px;font-weight:600;text-shadow:0 0 10px rgba(100,181,246,0.5);">Star Info</h4>
             <button id="info-close" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.3);
-                color:#ff6b6b;cursor:pointer;font-size:20px;padding:2px 8px;border-radius:6px;
-                font-weight:bold;transition:all 0.2s;" 
+                color:#ff6b6b;cursor:pointer;font-size:22px;padding:2px 10px;border-radius:6px;
+                font-weight:bold;transition:all 0.2s;line-height:1;" 
                 onmouseover="this.style.background='rgba(255,107,107,0.2)'"
                 onmouseout="this.style.background='rgba(255,255,255,0.1)'">×</button>
         </div>
-        <div id="info-content" style="color:#c5d7e8;font-size:13px;line-height:1.8;"></div>
+        <div id="info-content" style="color:#c5d7e8;font-size:13px;line-height:1.9;"></div>
     </div>
 
     <div id="hud">
@@ -263,23 +414,23 @@
                 <button id="toggleSolarSystem">🌍 Show Solar System Labels</button>
             </div>
         
-        <div class="info-panel" style="margin-top: 10px; padding: 8px; font-size: 11px;">
-            <div style="color: #4dd0e1; font-weight: bold; margin-bottom: 8px;">🎮 CONTROLS:</div>
+        <div class="info-panel" style="margin-top: 12px; padding: 10px 12px; font-size: 11px;">
+            <div style="color: #4dd0e1; font-weight: bold; margin-bottom: 10px; font-size: 12px;">🎮 CONTROLS:</div>
             
-            <div style="color: #90a4ae; font-size: 10px; margin-bottom: 8px;">
-                <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">CLICK Star</span> → Navigate to Star</div>
-                <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">CLICK Label</span> → Navigate to Label</div>
-                <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">DRAG</span> → Look Around (Smooth)</div>
-                <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">SCROLL</span> → Zoom</div>
-                <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">WASD</span> → Fly Forward/Back/Left/Right</div>
-                <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">Q/E</span> → Fly Down/Up</div>
-                <div style="margin-bottom: 4px;"><span style="color: #ffeb3b;">SPACE+W/S</span> → Fly Up/Down</div>
-                <div style="margin-bottom: 4px;"><span style="color: #ff9800;">SHIFT</span> → Speed Boost (3x)</div>
+            <div style="color: #90a4ae; font-size: 11px; line-height: 1.7;">
+                <div style="margin-bottom: 5px;"><span style="color: #ffeb3b;">CLICK Star</span> → Navigate to Star</div>
+                <div style="margin-bottom: 5px;"><span style="color: #ffeb3b;">CLICK Label</span> → Navigate to Label</div>
+                <div style="margin-bottom: 5px;"><span style="color: #ffeb3b;">DRAG</span> → Look Around (Smooth)</div>
+                <div style="margin-bottom: 5px;"><span style="color: #ffeb3b;">SCROLL</span> → Zoom</div>
+                <div style="margin-bottom: 5px;"><span style="color: #ffeb3b;">WASD</span> → Fly Forward/Back/Left/Right</div>
+                <div style="margin-bottom: 5px;"><span style="color: #ffeb3b;">Q/E</span> → Fly Down/Up</div>
+                <div style="margin-bottom: 5px;"><span style="color: #ffeb3b;">SPACE+W/S</span> → Fly Up/Down</div>
+                <div style="margin-bottom: 5px;"><span style="color: #ff9800;">SHIFT</span> → Speed Boost (3x)</div>
             </div>
         </div>
         
         <div class="info-panel" id="hoverInfo">
-            <div style="color: #4dd0e1; font-weight: bold; margin-bottom: 8px; font-size: 11px;">📊 STATS:</div>
+            <div style="color: #4dd0e1; font-weight: bold; margin-bottom: 10px; font-size: 12px;">📊 STATS:</div>
             <div class="info-row">
                 <span class="info-label">Total Stars:</span>
                 <span class="info-value" id="galaxyCount">-</span>
