@@ -409,6 +409,7 @@
             <div class="status" id="status">Initializing...</div>
             
             <div class="button-group">
+                <button id="startTour">🎬 Start Guided Tour</button>
                 <button id="resetCamera">🏠 Reset View</button>
                 <button id="toggleStarLabels">⭐ Hide Legendary Stars</button>
                 <button id="toggleSolarSystem">🌍 Show Solar System Labels</button>
@@ -446,6 +447,26 @@
         </div>
         </div> <!-- Close hud-content -->
     </div> <!-- Close hud -->
+    
+    <!-- Tour Overlay -->
+    <div id="tourOverlay" style="display: none; position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); 
+        background: rgba(5, 10, 20, 0.85); padding: 20px 32px; border-radius: 16px; 
+        backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%);
+        border: 1px solid rgba(100, 181, 246, 0.25); max-width: 500px; z-index: 2000;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 40px rgba(100, 181, 246, 0.15);
+        text-align: center; transition: opacity 0.15s ease-in-out; opacity: 1;">
+        <div id="tourTitle" style="font-size: 18px; font-weight: 600; color: #64b5f6; margin-bottom: 8px; 
+            text-shadow: 0 0 10px rgba(100, 181, 246, 0.4); letter-spacing: 0.5px;"></div>
+        <div id="tourDescription" style="font-size: 13px; color: #90caf9; line-height: 1.6; margin-bottom: 16px; opacity: 0.9;"></div>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+            <button id="tourNext" style="padding: 8px 20px; font-size: 13px; background: linear-gradient(135deg, #1e88e5, #1565c0);
+                border: 1px solid rgba(100, 181, 246, 0.3); border-radius: 8px; color: white; cursor: pointer; font-weight: 500;
+                transition: all 0.3s; box-shadow: 0 2px 12px rgba(30, 136, 229, 0.3);">Next →</button>
+            <button id="tourSkip" style="padding: 8px 20px; font-size: 13px; background: rgba(255, 255, 255, 0.06);
+                border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; color: #90caf9; cursor: pointer;
+                transition: all 0.3s;">Skip Tour</button>
+        </div>
+    </div>
     
     <!-- Three.js library -->
     <script src="three.min.js"></script>

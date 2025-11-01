@@ -170,6 +170,32 @@ class CosmicWebViewer {
     this.navigationSpeed = 80; // parsecs per second
     this.isNavigating = false;
 
+    // Cinematic Tour System
+    this.tourActive = false;
+    this.tourCurrentStop = 0;
+    this.tourWaypoints = [
+      {
+        name: "Sirius - The Brightest Star",
+        description: "The brightest star in Earth's night sky, 8.6 light-years away. A brilliant blue-white beacon.",
+        targetStar: "Sirius"
+      },
+      {
+        name: "Betelgeuse - Red Supergiant",
+        description: "A massive red supergiant in Orion, hundreds of times larger than our Sun. Near the end of its life.",
+        targetStar: "Betelgeuse"
+      },
+      {
+        name: "Rigil Kentaurus - Nearest Star",
+        description: "Alpha Centauri, our closest stellar neighbor at just 4.3 light-years. A Sun-like star system.",
+        targetStar: "Rigil"
+      },
+      {
+        name: "Vega - Summer Triangle",
+        description: "A brilliant blue star 25 light-years away, one of the brightest stars visible from Earth.",
+        targetStar: "Vega"
+      }
+    ];
+
     this.init();
   }
 
@@ -1406,6 +1432,141 @@ class CosmicWebViewer {
     this.targetRotationY = this.camera.rotation.y;
   }
 
+  // Cinematic Tour System
+  startTour() {
+    console.log("🎬 Starting cinematic tour...");
+    this.tourActive = true;
+    this.tourCurrentStop = 0;
+    this.showTourStop();
+  }
+
+  showTourStop() {
+    if (this.tourCurrentStop >= this.tourWaypoints.length) {
+      this.endTour();
+      return;
+    }
+
+    const stop = this.tourWaypoints[this.tourCurrentStop];
+    console.log(`📍 Tour stop ${this.tourCurrentStop + 1}: ${stop.name}`);
+
+    // Find the star and navigate with SMOOTH SPACESHIP WARP effect
+    const star = this.findStarByName(stop.targetStar);
+    if (star) {
+      const startPos = this.camera.position.clone();
+      const targetPos = new THREE.Vector3(star.x, star.y, star.z);
+      
+      // Calculate EXACT direction from camera TO star (the travel vector)
+      const travelDirection = new THREE.Vector3();
+      travelDirection.subVectors(targetPos, startPos); // target - start = direction
+      travelDirection.normalize(); // Make it unit length
+      
+      // PULL BACK: Move camera in OPPOSITE direction (away from star)
+      // Like a spaceship building tension before the jump
+      const pullBackDistance = 5; // Bigger pullback (5 parsecs)
+      const pullBackVector = travelDirection.clone().multiplyScalar(-pullBackDistance);
+      const pullBackPos = startPos.clone().add(pullBackVector);
+      
+      console.log('🚀 Pull-back vector:', pullBackVector);
+      
+      // Phase 1: SLOW pull-back animation (1.2 seconds - much more noticeable)
+      const pullBackDuration = 1200;
+      const pullBackStart = performance.now();
+      
+      const pullBackAnimation = () => {
+        const elapsed = performance.now() - pullBackStart;
+        const progress = Math.min(elapsed / pullBackDuration, 1);
+        
+        // Smooth ease-out for natural deceleration
+        const eased = 1 - Math.pow(1 - progress, 3);
+        
+        this.camera.position.lerpVectors(startPos, pullBackPos, eased);
+        this.camera.lookAt(targetPos); // Keep looking at destination
+        
+        if (progress < 1) {
+          requestAnimationFrame(pullBackAnimation);
+        } else {
+          // Phase 2: Brief pause (0.3s) - like charging up
+          setTimeout(() => {
+            // Phase 3: LAUNCH forward at reduced speed
+            const originalSpeed = this.navigationSpeed;
+            this.navigationSpeed = 25; // Even slower for smooth feel
+            
+            this.navigateToStar(star);
+            
+            setTimeout(() => {
+              this.navigationSpeed = originalSpeed;
+            }, 100);
+            
+            // Phase 4: Show overlay during travel
+            setTimeout(() => {
+              const overlay = document.getElementById('tourOverlay');
+              document.getElementById('tourTitle').textContent = stop.name;
+              document.getElementById('tourDescription').textContent = stop.description;
+              overlay.style.display = 'block';
+              overlay.style.opacity = '0';
+              setTimeout(() => { overlay.style.opacity = '1'; }, 20);
+            }, 2000);
+          }, 300); // Pause before launch
+        }
+      };
+      
+      pullBackAnimation();
+    } else {
+      console.warn(`⚠️ Star not found: ${stop.targetStar}`);
+    }
+  }
+
+  nextTourStop() {
+    const overlay = document.getElementById('tourOverlay');
+    
+    // Instant fade out
+    overlay.style.opacity = '0';
+    
+    setTimeout(() => {
+      overlay.style.display = 'none';
+      
+      // Advance to next stop
+      this.tourCurrentStop++;
+      
+      // NO DELAY - Next button instantly triggers travel
+      if (this.tourActive) {
+        this.showTourStop();
+      }
+    }, 150); // Just fade time, no pause
+  }
+
+  endTour() {
+    console.log("✅ Tour complete!");
+    this.tourActive = false;
+    this.tourCurrentStop = 0;
+    
+    const overlay = document.getElementById('tourOverlay');
+    overlay.style.opacity = '0';
+    
+    setTimeout(() => {
+      overlay.style.display = 'none';
+    }, 150); // Reduced from 400ms to 150ms (62% faster)
+  }
+
+  findStarByName(name) {
+    // Search through galaxy data (same as searchStars)
+    const nameLower = name.toLowerCase();
+    
+    for (const star of this.galaxyData) {
+      // Check if this star has a famous name
+      if (this.famousStars && star.source_id && this.famousStars[star.source_id]) {
+        const starName = this.famousStars[star.source_id].name;
+        if (starName.toLowerCase().includes(nameLower)) {
+          console.log(`✅ Found star: ${starName} at (${star.x.toFixed(1)}, ${star.y.toFixed(1)}, ${star.z.toFixed(1)})`);
+          return star; // Return the star with x, y, z coordinates
+        }
+      }
+    }
+    
+    console.warn(`❌ Star not found in galaxyData: ${name}`);
+    return null;
+  }
+
   createSolarSystemPoints() {
     if (!this.solarSystemData || Object.keys(this.solarSystemData).length === 0)
       return;
@@ -1983,5 +2144,21 @@ window.addEventListener("DOMContentLoaded", () => {
         ? "Maximize HUD"
         : "Minimize HUD";
     });
+  }
+
+  // Wire up Tour buttons
+  const startTourBtn = document.getElementById("startTour");
+  if (startTourBtn) {
+    startTourBtn.addEventListener("click", () => viewer.startTour());
+  }
+
+  const tourNextBtn = document.getElementById("tourNext");
+  if (tourNextBtn) {
+    tourNextBtn.addEventListener("click", () => viewer.nextTourStop());
+  }
+
+  const tourSkipBtn = document.getElementById("tourSkip");
+  if (tourSkipBtn) {
+    tourSkipBtn.addEventListener("click", () => viewer.endTour());
   }
 });
