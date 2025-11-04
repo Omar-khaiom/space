@@ -54,8 +54,12 @@
             backdrop-filter: blur(20px) saturate(180%);
             -webkit-backdrop-filter: blur(20px) saturate(180%);
             border: 1px solid rgba(100, 181, 246, 0.15);
-            min-width: 260px;
-            max-width: 300px;
+            min-width: 280px;
+            width: clamp(280px, 22vw, 360px);
+            max-height: calc(100vh - 40px);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
             z-index: 1000;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 
@@ -148,7 +152,14 @@
         }
         
         .control-group {
-            margin-bottom: 15px;
+            margin-bottom: 10px;
+        }
+
+        /* Make HUD content scroll when it would exceed the viewport */
+        .hud-content {
+            overflow-y: auto;
+            min-height: 0;
+            flex: 1;
         }
         
         .control-group label {
@@ -414,21 +425,40 @@
                 <button id="toggleStarLabels">⭐ Hide Legendary Stars</button>
                 <button id="toggleSolarSystem">🌍 Show Solar System Labels</button>
             </div>
-        
-        <div class="info-panel" style="margin-top: 12px; padding: 10px 12px; font-size: 11px;">
-            <div style="color: #4dd0e1; font-weight: bold; margin-bottom: 10px; font-size: 12px;">🎮 CONTROLS:</div>
-            
-            <div style="color: #90a4ae; font-size: 11px; line-height: 1.7;">
-                <div style="margin-bottom: 5px;"><span style="color: #ffeb3b;">CLICK Star</span> → Navigate to Star</div>
-                <div style="margin-bottom: 5px;"><span style="color: #ffeb3b;">CLICK Label</span> → Navigate to Label</div>
-                <div style="margin-bottom: 5px;"><span style="color: #ffeb3b;">DRAG</span> → Look Around (Smooth)</div>
-                <div style="margin-bottom: 5px;"><span style="color: #ffeb3b;">SCROLL</span> → Zoom</div>
-                <div style="margin-bottom: 5px;"><span style="color: #ffeb3b;">WASD</span> → Fly Forward/Back/Left/Right</div>
-                <div style="margin-bottom: 5px;"><span style="color: #ffeb3b;">Q/E</span> → Fly Down/Up</div>
-                <div style="margin-bottom: 5px;"><span style="color: #ffeb3b;">SPACE+W/S</span> → Fly Up/Down</div>
-                <div style="margin-bottom: 5px;"><span style="color: #ff9800;">SHIFT</span> → Speed Boost (3x)</div>
+
+            <!-- Frame presets: Equatorial / Ecliptic / Galactic -->
+            <div class="button-group" style="margin-top:10px;">
+                <button id="viewEq" title="Equatorial (RA/Dec)">EQ</button>
+                <button id="viewEp" title="Ecliptic Plane">EP</button>
+                <button id="viewGal" title="Galactic Plane">GAL</button>
             </div>
-        </div>
+            
+            <!-- Tuning Panel -->
+            <div class="info-panel" id="tuningPanel" style="margin-top:12px;">
+                <div style="color:#4dd0e1;font-weight:bold;margin-bottom:10px;font-size:12px;">🎛️ TUNING</div>
+
+                <div class="control-group">
+                    <label for="fovControl">Field of View: <span id="fovValue">50°</span></label>
+                    <input type="range" id="fovControl" min="30" max="100" step="1" value="50">
+                </div>
+
+                <div class="control-group">
+                    <label for="starSizeControl">Star Size: <span id="starSizeValue">1.0×</span></label>
+                    <input type="range" id="starSizeControl" min="0.5" max="3" step="0.1" value="1">
+                </div>
+
+                <div class="control-group">
+                    <label for="intensityControl">Star Intensity: <span id="intensityValue">1.0×</span></label>
+                    <input type="range" id="intensityControl" min="0.5" max="2.5" step="0.05" value="1">
+                </div>
+
+                <div class="control-group" style="margin-bottom:0;">
+                    <label for="navSpeedControl">Navigation Speed: <span id="navSpeedValue">1.0×</span></label>
+                    <input type="range" id="navSpeedControl" min="0.2" max="5" step="0.1" value="1">
+                </div>
+            </div>
+        
+        
         
         <div class="info-panel" id="hoverInfo">
             <div style="color: #4dd0e1; font-weight: bold; margin-bottom: 10px; font-size: 12px;">📊 STATS:</div>
@@ -466,6 +496,23 @@
                 border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; color: #90caf9; cursor: pointer;
                 transition: all 0.3s;">Skip Tour</button>
         </div>
+    </div>
+
+    <!-- Star Info Overlay (center bottom, like tour popup) -->
+    <div id="starOverlay" style="display: none; position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); 
+        background: rgba(5, 10, 20, 0.88); padding: 16px 24px; border-radius: 16px; 
+        backdrop-filter: blur(26px) saturate(180%); -webkit-backdrop-filter: blur(26px) saturate(180%);
+        border: 1px solid rgba(100, 181, 246, 0.25); max-width: 520px; z-index: 2000;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 40px rgba(100, 181, 246, 0.15);
+        transition: opacity 0.15s ease-in-out; opacity: 1;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;">
+            <div id="starOverlayTitle" style="font-size: 18px; font-weight: 600; color: #64b5f6; text-shadow: 0 0 10px rgba(100,181,246,0.35);"></div>
+            <button id="starOverlayClose" style="padding: 6px 10px; font-size: 13px; background: rgba(255,255,255,0.06);
+                border: 1px solid rgba(255,255,255,0.25); border-radius: 8px; color: #90caf9; cursor: pointer;">
+                Close
+            </button>
+        </div>
+        <div id="starOverlayBody" style="margin-top: 10px; color: #c5d7e8; font-size: 13px; line-height: 1.7;"></div>
     </div>
     
     <!-- Three.js library -->

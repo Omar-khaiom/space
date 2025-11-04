@@ -106,7 +106,16 @@ class CosmicWebViewer {
     this.rotationX = 0;
     this.rotationY = 0;
     this.keyState = {}; // Track keys for free-flight movement
-    this.moveSpeed = 250; // Movement speed units per second (reduced from 500)
+    // Base speeds and settings
+    this.baseMoveSpeed = 250;
+    this.baseNavigationSpeed = 80;
+    this.settings = {
+      fov: 50,
+      starSizeScale: 1.0,
+      intensity: 1.0,
+      speedMultiplier: 1.0,
+    };
+    this.moveSpeed = this.baseMoveSpeed * this.settings.speedMultiplier; // Movement speed units per second (reduced from 500)
 
     // Smooth motion controls
     this.currentVelocity = new THREE.Vector3(0, 0, 0); // Current movement velocity
@@ -167,8 +176,12 @@ class CosmicWebViewer {
 
     // CLEAN navigation system (video game style)
     this.navigationTarget = null; // {position: Vector3, lookAt: Vector3}
-    this.navigationSpeed = 80; // parsecs per second
+  this.navigationSpeed = this.baseNavigationSpeed * this.settings.speedMultiplier; // parsecs per second
     this.isNavigating = false;
+
+  // Frame/overlay
+  this.currentFrame = 'EQ'; // 'EQ' | 'EP' | 'GAL'
+  this.planeOverlay = null; // THREE.Object3D
 
     // Cinematic Tour System
     this.tourActive = false;
@@ -274,7 +287,7 @@ class CosmicWebViewer {
 
   setupCamera() {
     const aspect = window.innerWidth / window.innerHeight;
-    this.camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 50000);
+    this.camera = new THREE.PerspectiveCamera(this.settings.fov, aspect, 0.1, 50000);
     // Start at origin looking along +X axis - we're inside the galaxy now!
     this.camera.position.set(0, 0, 0);
     this.camera.lookAt(100, 0, 0);
@@ -336,6 +349,17 @@ class CosmicWebViewer {
       isDragging = false;
       canvas.style.cursor = "grab";
     });
+
+    // Global safety: if mouseup happens outside the canvas/window, ensure state resets
+    const resetMouseState = () => {
+      this.isMouseDown = false;
+      isDragging = false;
+      if (canvas && canvas.style) canvas.style.cursor = "grab";
+    };
+    window.addEventListener("mouseup", resetMouseState);
+    window.addEventListener("pointerup", resetMouseState);
+    window.addEventListener("blur", resetMouseState);
+    window.addEventListener("mouseleave", resetMouseState);
 
     canvas.addEventListener("mousemove", (e) => {
       if (!this.isMouseDown) return;
@@ -715,28 +739,35 @@ class CosmicWebViewer {
   convertApiStarsToGalaxyData(apiStars, centerCoords) {
     const stars = [];
 
-    // Color mapping from BP-RP color index
-    const getColorFromBV = (bv) => {
-      // BP-RP ranges from -0.5 (hot blue) to +7.4 (very cool red)
-      // BALANCED: Natural colors, easy on the eyes, still realistic
-      if (bv === undefined || bv === null) return [0.9, 0.9, 1.0]; // Slight blue-white
-
-      // Very hot blue stars (O, B types) - Soft blue
-      if (bv < 0) return [0.5, 0.7, 1.0];
-      // Hot blue-white (A types like Vega, Sirius) - Bright blue-white
-      if (bv < 0.5) return [0.75, 0.85, 1.0];
-      // White (F types) - Pure white
-      if (bv < 0.8) return [1.0, 1.0, 1.0];
-      // Yellow-white (G types like Sun) - SOFTER yellow (less harsh)
-      if (bv < 1.2) return [1.0, 0.95, 0.8]; // Much less saturated yellow
-      // Orange (K types) - Gentle orange
-      if (bv < 1.8) return [1.0, 0.75, 0.5];
-      // Red (early M types) - Orange-red
-      if (bv < 2.5) return [1.0, 0.6, 0.3];
-      // Deep red (late M types) - Deep red
-      if (bv < 4.0) return [1.0, 0.4, 0.2];
-      // Very cool red dwarfs/giants - Dark red
-      return [0.9, 0.3, 0.15];
+    // More accurate color mapping:
+    // 1) Use famous star temperature if known
+    // 2) Use API-provided RGB if present
+    // 3) Use API temperature if present
+    // 4) Derive temperature from BP-RP then convert to sRGB
+    const clamp01 = (v) => Math.max(0, Math.min(1, v));
+    const kelvinToRgb = (kelvin) => {
+      // Tanner Helland approximation (Kelvin -> sRGB)
+      const t = kelvin / 100.0;
+      let r, g, b;
+      if (t <= 66) r = 255; else r = 329.698727446 * Math.pow(t - 60.0, -0.1332047592);
+      if (t <= 66) g = 99.4708025861 * Math.log(Math.max(1.0, t)) - 161.1195681661; else g = 288.1221695283 * Math.pow(t - 60.0, -0.0755148492);
+      if (t >= 66) b = 255; else if (t <= 19) b = 0; else b = 138.5177312231 * Math.log(t - 10.0) - 305.0447927307;
+      return [clamp01(Math.round(Math.max(0, Math.min(255, r))) / 255),
+              clamp01(Math.round(Math.max(0, Math.min(255, g))) / 255),
+              clamp01(Math.round(Math.max(0, Math.min(255, b))) / 255)];
+    };
+    const bpToKelvin = (bp) => {
+      // Piecewise interpolation through spectral anchors (approximate)
+      const x = Math.max(-0.3, Math.min(3.0, bp ?? 0.0));
+      const lerp = (a,b,t)=>a+(b-a)*t; const itp=(x,x0,x1,y0,y1)=>x<=x0?y0:x>=x1?y1:lerp(y0,y1,(x-x0)/(x1-x0));
+      if (x < -0.1) return itp(x,-0.3,-0.1,25000,15000);
+      if (x < 0.0)  return itp(x,-0.1, 0.0,15000, 9600);
+      if (x < 0.3)  return itp(x, 0.0, 0.3, 9600, 7400);
+      if (x < 0.65) return itp(x, 0.3, 0.65,7400, 5778);
+      if (x < 1.0)  return itp(x,0.65, 1.0,5778, 5000);
+      if (x < 1.5)  return itp(x, 1.0, 1.5,5000, 4000);
+      if (x < 2.0)  return itp(x, 1.5, 2.0,4000, 3500);
+      return itp(x, 2.0, 3.0,3500, 3000);
     };
 
     for (const star of apiStars) {
@@ -757,8 +788,24 @@ class CosmicWebViewer {
 
       const pos = this.equatorialToPosition(star.ra, star.dec, distance);
 
-      // Get color from B-V index
-      const color = getColorFromBV(star.color_bp_rp);
+      // Determine color with priority overrides
+      let color;
+      // Famous star override by source_id (tempK)
+      const fs = this.famousStars && star.source_id ? this.famousStars[star.source_id] : null;
+      if (fs && fs.tempK) {
+        color = kelvinToRgb(fs.tempK);
+      } else if (star.r != null && star.g != null && star.b != null) {
+        // Backend-provided RGB
+        color = [clamp01(star.r), clamp01(star.g), clamp01(star.b)];
+      } else if (star.temperature != null && !isNaN(star.temperature)) {
+        color = kelvinToRgb(star.temperature);
+      } else if (star.color_bp_rp != null) {
+        const k = bpToKelvin(star.color_bp_rp);
+        color = kelvinToRgb(k);
+      } else {
+        // Neutral fallback (slight blue-white like Vega)
+        color = kelvinToRgb(9600);
+      }
 
       stars.push({
         x: pos.x,
@@ -954,6 +1001,8 @@ class CosmicWebViewer {
       uniforms: {
         pointTexture: { value: texture },
         time: { value: 0.0 },
+        starSizeScale: { value: this.settings.starSizeScale },
+        intensity: { value: this.settings.intensity },
       },
       vertexShader: `
         attribute float size;
@@ -963,6 +1012,7 @@ class CosmicWebViewer {
         varying float vBrightness;
         varying float vDistance;
         uniform float time;
+        uniform float starSizeScale;
         
         void main() {
           vColor = color;
@@ -976,12 +1026,13 @@ class CosmicWebViewer {
           float pulse = sin(time * 1.5 + twinkle * 6.28) * 0.5 + 0.5;
           float sizeMultiplier = 1.0 + (pulse * twinkleAmount);
           
-          gl_PointSize = size * sizeMultiplier * (300.0 / -mvPosition.z);
+          gl_PointSize = size * sizeMultiplier * starSizeScale * (300.0 / -mvPosition.z);
           gl_Position = projectionMatrix * mvPosition;
         }
       `,
       fragmentShader: `
         uniform sampler2D pointTexture;
+        uniform float intensity;
         varying vec3 vColor;
         varying float vBrightness;
         varying float vDistance;
@@ -1000,7 +1051,7 @@ class CosmicWebViewer {
           vec3 saturatedColor = mix(vec3(lum), vColor, 1.5);
           
           // Gentler brightness boost
-          vec3 boostedColor = saturatedColor * (1.3 + vBrightness * 0.4);
+          vec3 boostedColor = saturatedColor * (1.3 + vBrightness * 0.4) * intensity;
           
           // Apply distance fog with dark blue tint
           vec3 fogColor = vec3(0.0, 0.0, 0.02);
@@ -1010,7 +1061,7 @@ class CosmicWebViewer {
           
           // Extra brightness for very bright stars
           if (vBrightness > 0.8) {
-            gl_FragColor.rgb *= 1.3;
+            gl_FragColor.rgb *= 1.3 * intensity;
           }
         }
       `,
@@ -1025,6 +1076,9 @@ class CosmicWebViewer {
 
     // Store material reference for animation
     this.starMaterial = material;
+
+    // Ensure plane overlay matches the current frame
+    this.updatePlaneOverlay();
   }
 
   animate() {
@@ -1034,8 +1088,16 @@ class CosmicWebViewer {
     this.lastTime = now;
 
     // Update twinkling animation
-    if (this.starMaterial && this.starMaterial.uniforms.time) {
-      this.starMaterial.uniforms.time.value = now / 1000.0; // Time in seconds
+    if (this.starMaterial && this.starMaterial.uniforms) {
+      if (this.starMaterial.uniforms.time) {
+        this.starMaterial.uniforms.time.value = now / 1000.0; // Time in seconds
+      }
+      if (this.starMaterial.uniforms.starSizeScale) {
+        this.starMaterial.uniforms.starSizeScale.value = this.settings.starSizeScale;
+      }
+      if (this.starMaterial.uniforms.intensity) {
+        this.starMaterial.uniforms.intensity.value = this.settings.intensity;
+      }
     }
 
     // VIDEO GAME STYLE: Update navigation FIRST
@@ -1134,6 +1196,88 @@ class CosmicWebViewer {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  // ======== Frame switching & plane overlay ========
+  setFrame(frame) {
+    const valid = ['EQ','EP','GAL'];
+    if (!valid.includes(frame)) return;
+    this.currentFrame = frame;
+    this.updatePlaneOverlay();
+    this.alignCameraToCurrentFrame();
+  }
+
+  updatePlaneOverlay() {
+    if (!this.scene) return;
+    if (this.planeOverlay) {
+      this.scene.remove(this.planeOverlay);
+      this.planeOverlay.geometry?.dispose?.();
+      this.planeOverlay.material?.dispose?.();
+      this.planeOverlay = null;
+    }
+
+    const radius = 1000; // match constellation sphere
+    const segments = 256;
+    const positions = new Float32Array((segments) * 3);
+    for (let i = 0; i < segments; i++) {
+      const t = (i / segments) * Math.PI * 2;
+      positions[i*3+0] = Math.cos(t) * radius;
+      positions[i*3+1] = 0;
+      positions[i*3+2] = Math.sin(t) * radius;
+    }
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    const color = this.currentFrame === 'EQ' ? 0x64b5f6 : (this.currentFrame === 'EP' ? 0xffd54f : 0xba68c8);
+    const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85, depthTest: false });
+    const ring = new THREE.LineLoop(geom, mat);
+
+    // Rotate ring so its normal aligns with the frame normal
+    const normal = this.getFrameNormal(this.currentFrame);
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), normal);
+    ring.quaternion.copy(q);
+
+    this.planeOverlay = ring;
+    this.scene.add(this.planeOverlay);
+  }
+
+  getFrameNormal(frame) {
+    if (frame === 'EQ') {
+      return new THREE.Vector3(0,1,0); // Equatorial plane: y=0
+    }
+    if (frame === 'EP') {
+      const ob = THREE.MathUtils.degToRad(23.439281); // obliquity
+      const n = new THREE.Vector3(0,1,0);
+      // rotate equatorial normal around X axis by -obliquity to get ecliptic normal
+      return n.applyAxisAngle(new THREE.Vector3(1,0,0), -ob);
+    }
+    // GALACTIC: North galactic pole (ICRS) RA=192.85948°, Dec=27.12825°
+    const ra = THREE.MathUtils.degToRad(192.85948);
+    const dec = THREE.MathUtils.degToRad(27.12825);
+    const x = Math.cos(dec) * Math.cos(ra);
+    const y = Math.sin(dec);
+    const z = Math.cos(dec) * Math.sin(ra);
+    return new THREE.Vector3(x,y,z).normalize();
+  }
+
+  alignCameraToCurrentFrame() {
+    // Keep position; only reorient to have the plane as the reference "level"
+    const up = this.getFrameNormal(this.currentFrame);
+    const baseForward = new THREE.Vector3(1,0,0);
+    // Project base forward onto plane
+    const forward = baseForward.clone().sub(up.clone().multiplyScalar(baseForward.dot(up)));
+    if (forward.lengthSq() < 1e-6) {
+      forward.set(0,0,1).sub(up.clone().multiplyScalar(up.z));
+    }
+    forward.normalize();
+
+    this.camera.up.copy(up);
+    const target = this.camera.position.clone().add(forward);
+    this.camera.lookAt(target);
+
+    // Sync smoothed rotation targets
+    this.targetRotationX = this.camera.rotation.x;
+    this.targetRotationY = this.camera.rotation.y;
   }
 
   updateStatus(message) {
@@ -1275,67 +1419,84 @@ class CosmicWebViewer {
 
   // Click-to-navigate: find and fly to clicked star/planet
   handleStarClick(event) {
-    // Create raycaster for mouse picking
-    const mouse = new THREE.Vector2();
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    // Left-click only
+    if (event.button !== 0) return;
 
-    const raycaster = new THREE.Raycaster();
-    raycaster.params.Points.threshold = 2.0; // Larger detection radius for easier clicking
-    raycaster.setFromCamera(mouse, this.camera);
+    // Simple, robust CPU pick in screen space (works with ShaderMaterial points)
+    const px = event.clientX;
+    const py = event.clientY;
+    const dpr = window.devicePixelRatio || 1;
+    const pickRadius = 18 * dpr; // pixels
+    const pickRadius2 = pickRadius * pickRadius;
 
-    // Check both star points and solar system points
-    const objects = [this.points];
-    if (this.solarSystemPoints) {
-      objects.push(this.solarSystemPoints);
+    let best = null; // { type: 'star'|'solar', index, position: Vector3 }
+    let bestD2 = pickRadius2;
+
+    // Check galaxy stars
+    for (let i = 0; i < this.galaxyData.length; i++) {
+      const s = this.galaxyData[i];
+      const p = s.pos || new THREE.Vector3(s.x, s.y, s.z);
+      const sp = p.clone().project(this.camera);
+      if (sp.z > 1.0) continue; // behind camera
+      const sx = (sp.x * 0.5 + 0.5) * window.innerWidth;
+      const sy = (-sp.y * 0.5 + 0.5) * window.innerHeight;
+      if (sx < 0 || sx > window.innerWidth || sy < 0 || sy > window.innerHeight) continue;
+      const dx = sx - px;
+      const dy = sy - py;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        best = { type: 'star', index: i, position: p };
+      }
     }
 
-    const intersects = raycaster.intersectObjects(objects, true);
-
-    if (intersects.length > 0) {
-      const intersection = intersects[0];
-      const clickedIndex = intersection.index;
-
-      // Check if it's a solar system object
-      if (intersection.object === this.solarSystemPoints) {
-        const solarObjects = Object.values(this.solarSystemData);
-        const solarObj = solarObjects[clickedIndex];
-
-        if (solarObj) {
-          const starData = {
-            x: solarObj.x * this.solarSystemScale,
-            y: solarObj.y * this.solarSystemScale,
-            z: solarObj.z * this.solarSystemScale
-          };
-
-          console.log(`🎯 Clicked on ${solarObj.name}`);
-          
-          // Use new video game navigation system
-          this.navigateToStar(starData);
-        }
-      } else {
-        // It's a regular star
-        const star = this.galaxyData[clickedIndex];
-
-        if (star) {
-          const starInfo = this.famousStars
-            ? this.famousStars[star.source_id]
-            : null;
-          const starName = starInfo
-            ? starInfo.name
-            : `Gaia ${star.source_id.toString().slice(-6)}`;
-
-          console.log(`🎯 Clicked on ${starName}`);
-          
-          // Use new video game navigation system
-          this.navigateToStar(star);
-          
-          // Open info panel (selectStar is a global function, not a method)
-          if (typeof selectStar === 'function') {
-            selectStar(star, starName);
-          }
+    // Also consider solar system points (optional)
+    if (this.solarSystemData && Object.keys(this.solarSystemData).length) {
+      const objs = Object.values(this.solarSystemData);
+      for (let j = 0; j < objs.length; j++) {
+        const o = objs[j];
+        const p = new THREE.Vector3(
+          o.x * this.solarSystemScale,
+          o.y * this.solarSystemScale,
+          o.z * this.solarSystemScale
+        );
+        const sp = p.clone().project(this.camera);
+        if (sp.z > 1.0) continue;
+        const sx = (sp.x * 0.5 + 0.5) * window.innerWidth;
+        const sy = (-sp.y * 0.5 + 0.5) * window.innerHeight;
+        if (sx < 0 || sx > window.innerWidth || sy < 0 || sy > window.innerHeight) continue;
+        const dx = sx - px;
+        const dy = sy - py;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          best = { type: 'solar', index: j, position: p };
         }
       }
+    }
+
+    if (!best) return; // nothing close enough
+
+    if (best.type === 'solar') {
+      const solarObjects = Object.values(this.solarSystemData);
+      const solarObj = solarObjects[best.index];
+      if (solarObj) {
+        const starData = { x: best.position.x, y: best.position.y, z: best.position.z };
+        console.log(`🎯 Clicked on ${solarObj.name}`);
+        this.navigateToStar(starData);
+      }
+      return;
+    }
+
+    // Regular star
+    const star = this.galaxyData[best.index];
+    if (!star) return;
+    const starInfo = this.famousStars ? this.famousStars[star.source_id] : null;
+    const starName = starInfo ? starInfo.name : (star.source_id ? `Gaia ${star.source_id.toString().slice(-6)}` : 'Star');
+    console.log(`🎯 Clicked on ${starName}`);
+    this.navigateToStar(star);
+    if (typeof selectStar === 'function') {
+      selectStar(star, starName);
     }
   }
 
@@ -2087,7 +2248,54 @@ window.addEventListener("DOMContentLoaded", () => {
     } else {
       console.error(`❌ Info panel elements not found:`, { infoPanel, infoStarName, infoContent });
     }
+
+    // Additionally show center-bottom overlay like the tour popup
+    const starOverlay = document.getElementById('starOverlay');
+    const starOverlayTitle = document.getElementById('starOverlayTitle');
+    const starOverlayBody = document.getElementById('starOverlayBody');
+    const starOverlayClose = document.getElementById('starOverlayClose');
+    if (starOverlay && starOverlayTitle && starOverlayBody) {
+      starOverlayTitle.textContent = name;
+      starOverlayBody.innerHTML = `
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 12px;">
+          <span style="color:#64b5f6;">📍</span>
+          <div>
+            <div style="color:#90caf9;font-size:11px;opacity:0.8;">Distance</div>
+            <div style="color:#e8f4ff;font-weight:600;">${distStr}</div>
+          </div>
+          <span style="color:#ffa726;">✨</span>
+          <div>
+            <div style="color:#ffcc80;font-size:11px;opacity:0.8;">Apparent Mag</div>
+            <div style="color:#fff;font-weight:600;">${appMag}</div>
+          </div>
+          <span style="color:#ab47bc;">💫</span>
+          <div>
+            <div style="color:#ce93d8;font-size:11px;opacity:0.8;">Absolute Mag</div>
+            <div style="color:#fff;font-weight:600;">${absMag}</div>
+          </div>
+          <span style="color:#26c6da;">🌟</span>
+          <div>
+            <div style="color:#4dd0e1;font-size:11px;opacity:0.8;">Spectral Type</div>
+            <div style="color:${spectralColor};font-weight:700;">${spectralClass}</div>
+          </div>
+        </div>
+        <div style="margin-top:10px;color:#78909c;font-size:10px;text-align:center;">${star.source_id || ''}</div>
+      `;
+      starOverlay.style.display = 'block';
+      starOverlay.style.opacity = '0';
+      setTimeout(()=>{ starOverlay.style.opacity = '1'; }, 20);
+
+      if (starOverlayClose) {
+        starOverlayClose.onclick = () => {
+          starOverlay.style.opacity = '0';
+          setTimeout(()=>{ starOverlay.style.display = 'none'; }, 150);
+        };
+      }
+    }
   }
+
+  // Expose to global so canvas click handler inside CosmicWebViewer can call it
+  window.selectStar = selectStar;
 
   // Close info panel
   if (infoClose) {
@@ -2161,4 +2369,67 @@ window.addEventListener("DOMContentLoaded", () => {
   if (tourSkipBtn) {
     tourSkipBtn.addEventListener("click", () => viewer.endTour());
   }
+
+  // ========== Tuning Controls ==========
+  const fovControl = document.getElementById('fovControl');
+  const fovValue = document.getElementById('fovValue');
+  const starSizeControl = document.getElementById('starSizeControl');
+  const starSizeValue = document.getElementById('starSizeValue');
+  const intensityControl = document.getElementById('intensityControl');
+  const intensityValue = document.getElementById('intensityValue');
+  const navSpeedControl = document.getElementById('navSpeedControl');
+  const navSpeedValue = document.getElementById('navSpeedValue');
+
+  // Initialize UI from viewer settings
+  if (fovControl && fovValue) {
+    fovControl.value = viewer.settings.fov.toString();
+    fovValue.textContent = `${viewer.settings.fov}°`;
+    fovControl.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      viewer.settings.fov = val;
+      viewer.camera.fov = val;
+      viewer.camera.updateProjectionMatrix();
+      fovValue.textContent = `${val}°`;
+    });
+  }
+
+  if (starSizeControl && starSizeValue) {
+    starSizeControl.value = viewer.settings.starSizeScale.toString();
+    starSizeValue.textContent = `${parseFloat(starSizeControl.value).toFixed(1)}×`;
+    starSizeControl.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      viewer.settings.starSizeScale = val;
+      starSizeValue.textContent = `${val.toFixed(1)}×`;
+    });
+  }
+
+  if (intensityControl && intensityValue) {
+    intensityControl.value = viewer.settings.intensity.toString();
+    intensityValue.textContent = `${parseFloat(intensityControl.value).toFixed(2)}×`;
+    intensityControl.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      viewer.settings.intensity = val;
+      intensityValue.textContent = `${val.toFixed(2)}×`;
+    });
+  }
+
+  if (navSpeedControl && navSpeedValue) {
+    navSpeedControl.value = viewer.settings.speedMultiplier.toString();
+    navSpeedValue.textContent = `${parseFloat(navSpeedControl.value).toFixed(1)}×`;
+    navSpeedControl.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      viewer.settings.speedMultiplier = val;
+      viewer.moveSpeed = viewer.baseMoveSpeed * val;
+      viewer.navigationSpeed = viewer.baseNavigationSpeed * val;
+      navSpeedValue.textContent = `${val.toFixed(1)}×`;
+    });
+  }
+
+  // ========== Frame Preset Buttons ==========
+  const viewEq = document.getElementById('viewEq');
+  const viewEp = document.getElementById('viewEp');
+  const viewGal = document.getElementById('viewGal');
+  if (viewEq) viewEq.addEventListener('click', () => viewer.setFrame('EQ'));
+  if (viewEp) viewEp.addEventListener('click', () => viewer.setFrame('EP'));
+  if (viewGal) viewGal.addEventListener('click', () => viewer.setFrame('GAL'));
 });
